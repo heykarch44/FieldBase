@@ -6,16 +6,15 @@ import { createClient } from '@/lib/supabase/client'
 import { formatDateTime } from '@/lib/utils'
 import { Card, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import type { ServiceVisit, User, Customer } from '@/lib/types'
-import { Clock, Camera, FlaskConical, Wrench, MapPin, AlertTriangle } from 'lucide-react'
+import { Clock, ClipboardList, MapPin, AlertTriangle } from 'lucide-react'
 
 interface FeedEvent {
   id: string
   visitId?: string
-  type: 'visit' | 'photo' | 'chemical' | 'repair'
+  type: 'visit' | 'order'
   description: string
   technician: string
-  customer: string
+  jobsite: string
   timestamp: string
   geofence_flagged?: boolean
 }
@@ -32,24 +31,27 @@ export function ServiceFeed() {
 
       // Recent visits
       const { data: visits } = await supabase
-        .from('service_visits')
+        .from('visits')
         .select(`
           id, status, arrived_at, departed_at, scheduled_date, geofence_flagged,
-          customer:customers(first_name, last_name),
-          technician:users!service_visits_technician_id_fkey(full_name)
+          jobsite:jobsites(name),
+          technician:users!visits_technician_id_fkey(full_name)
         `)
         .order('updated_at', { ascending: false })
         .limit(10)
 
       if (visits) {
         for (const v of visits) {
-          const visit = v as unknown as ServiceVisit & {
-            customer: Pick<Customer, 'first_name' | 'last_name'>
-            technician: Pick<User, 'full_name'>
+          const visit = v as unknown as {
+            id: string
+            status: string
+            arrived_at: string | null
+            departed_at: string | null
+            geofence_flagged: boolean
+            jobsite: { name: string }
+            technician: { full_name: string }
           }
-          const custName = visit.customer
-            ? `${visit.customer.first_name} ${visit.customer.last_name}`
-            : 'Unknown'
+          const jobName = visit.jobsite?.name ?? 'Unknown'
           const techName = visit.technician?.full_name ?? 'Unknown'
 
           if (visit.status === 'completed' && visit.departed_at) {
@@ -57,9 +59,9 @@ export function ServiceFeed() {
               id: `visit-departed-${visit.id}`,
               visitId: visit.id,
               type: 'visit',
-              description: `Completed service visit`,
+              description: 'Completed visit',
               technician: techName,
-              customer: custName,
+              jobsite: jobName,
               timestamp: visit.departed_at,
               geofence_flagged: visit.geofence_flagged,
             })
@@ -68,9 +70,9 @@ export function ServiceFeed() {
               id: `visit-arrived-${visit.id}`,
               visitId: visit.id,
               type: 'visit',
-              description: `Arrived at location`,
+              description: 'Arrived at location',
               technician: techName,
-              customer: custName,
+              jobsite: jobName,
               timestamp: visit.arrived_at,
               geofence_flagged: visit.geofence_flagged,
             })
@@ -78,37 +80,34 @@ export function ServiceFeed() {
         }
       }
 
-      // Recent repair requests
-      const { data: repairs } = await supabase
-        .from('repair_requests')
+      // Recent service orders
+      const { data: orders } = await supabase
+        .from('service_orders')
         .select(`
-          id, category, created_at,
-          customer:customers(first_name, last_name),
-          requester:users!repair_requests_requested_by_fkey(full_name)
+          id, title, created_at,
+          jobsite:jobsites(name),
+          requester:users!service_orders_requested_by_fkey(full_name)
         `)
         .order('created_at', { ascending: false })
         .limit(5)
 
-      if (repairs) {
-        for (const r of repairs) {
-          const repair = r as unknown as {
+      if (orders) {
+        for (const o of orders) {
+          const order = o as unknown as {
             id: string
-            category: string
+            title: string
             created_at: string
-            customer: Pick<Customer, 'first_name' | 'last_name'>
-            requester: Pick<User, 'full_name'>
+            jobsite: { name: string }
+            requester: { full_name: string }
           }
-          const custName = repair.customer
-            ? `${repair.customer.first_name} ${repair.customer.last_name}`
-            : 'Unknown'
 
           feedEvents.push({
-            id: `repair-${repair.id}`,
-            type: 'repair',
-            description: `New repair request: ${repair.category}`,
-            technician: repair.requester?.full_name ?? 'Unknown',
-            customer: custName,
-            timestamp: repair.created_at,
+            id: `order-${order.id}`,
+            type: 'order',
+            description: `New service order: ${order.title}`,
+            technician: order.requester?.full_name ?? 'Unknown',
+            jobsite: order.jobsite?.name ?? 'Unknown',
+            timestamp: order.created_at,
           })
         }
       }
@@ -130,14 +129,14 @@ export function ServiceFeed() {
       .channel('service-feed')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'service_visits' },
+        { event: '*', schema: 'public', table: 'visits' },
         () => {
           fetchRecentActivity()
         }
       )
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'repair_requests' },
+        { event: 'INSERT', schema: 'public', table: 'service_orders' },
         () => {
           fetchRecentActivity()
         }
@@ -151,16 +150,12 @@ export function ServiceFeed() {
 
   const iconMap = {
     visit: MapPin,
-    photo: Camera,
-    chemical: FlaskConical,
-    repair: Wrench,
+    order: ClipboardList,
   }
 
   const colorMap = {
-    visit: 'text-aqua-600 bg-aqua-50',
-    photo: 'text-violet-600 bg-violet-50',
-    chemical: 'text-emerald-600 bg-emerald-50',
-    repair: 'text-amber-600 bg-amber-50',
+    visit: 'text-indigo-600 bg-indigo-50',
+    order: 'text-amber-600 bg-amber-50',
   }
 
   return (
@@ -186,7 +181,7 @@ export function ServiceFeed() {
               <div
                 key={event.id}
                 className={`flex items-start gap-3 rounded-lg p-2 hover:bg-sand-50 ${
-                  isClickable ? 'cursor-pointer transition-colors hover:bg-aqua-50/50' : ''
+                  isClickable ? 'cursor-pointer transition-colors hover:bg-indigo-50/50' : ''
                 }`}
                 onClick={
                   isClickable
@@ -208,7 +203,7 @@ export function ServiceFeed() {
                     )}
                   </p>
                   <p className="text-xs text-sand-400">
-                    {event.customer} &middot; {formatDateTime(event.timestamp)}
+                    {event.jobsite} &middot; {formatDateTime(event.timestamp)}
                   </p>
                 </div>
               </div>

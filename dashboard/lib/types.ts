@@ -1,38 +1,102 @@
-// Database types matching the Supabase schema
+// Database types matching the FieldBase Supabase schema
 
-export type UserRole = 'admin' | 'office' | 'technician' | 'customer';
-export type PoolType = 'chlorine' | 'saltwater' | 'other';
+export type UserRole = 'owner' | 'admin' | 'manager' | 'technician' | 'viewer';
+export type OrgPlan = 'free' | 'pro' | 'enterprise';
 export type DayOfWeek = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
-export type CustomerStatus = 'active' | 'inactive' | 'lead';
-export type VisitStatus = 'scheduled' | 'in_progress' | 'completed' | 'skipped';
-export type ChemicalUnit = 'oz' | 'lbs' | 'gallons' | 'tablets';
-export type PhotoType = 'before' | 'after' | 'issue' | 'equipment';
-export type RepairCategory = 'pump' | 'filter' | 'pipe' | 'heater' | 'tile' | 'acid_wash' | 'resurface' | 'electrical' | 'plumbing' | 'other';
-export type UrgencyLevel = 'low' | 'medium' | 'high' | 'emergency';
-export type RepairStatus = 'pending_review' | 'quoted' | 'approved' | 'scheduled' | 'in_progress' | 'completed' | 'declined';
-export type QuoteStatus = 'draft' | 'sent' | 'viewed' | 'accepted' | 'declined' | 'expired';
-export type InvoiceType = 'recurring' | 'one_time';
+export type VisitStatus = 'scheduled' | 'en_route' | 'in_progress' | 'completed' | 'skipped' | 'canceled';
+export type ServiceOrderStatus = 'draft' | 'pending' | 'approved' | 'scheduled' | 'in_progress' | 'completed' | 'invoiced' | 'canceled';
 export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'void';
-export type EquipmentType = 'pump' | 'filter' | 'heater' | 'salt_cell' | 'automation' | 'cleaner' | 'light' | 'other';
-export type EquipmentCondition = 'good' | 'fair' | 'poor' | 'needs_replacement';
+export type UrgencyLevel = 'low' | 'medium' | 'high' | 'emergency';
+export type FieldType = 'text' | 'number' | 'enum' | 'boolean' | 'date' | 'photo' | 'signature' | 'textarea' | 'email' | 'phone' | 'url';
+export type EntityType = 'jobsite' | 'visit' | 'service_order' | 'inventory_item' | 'equipment';
+export type InviteStatus = 'pending' | 'accepted' | 'expired' | 'revoked';
+export type DocType = 'plan' | 'permit' | 'contract' | 'photo_report' | 'inspection' | 'other';
+
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  template_id: string | null;
+  plan: OrgPlan;
+  logo_url: string | null;
+  timezone: string;
+  settings: Record<string, unknown>;
+  stripe_customer_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface User {
   id: string;
   email: string;
   full_name: string;
   phone: string | null;
-  role: UserRole;
   avatar_url: string | null;
+  active_org_id: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export interface Customer {
+export interface OrgMember {
   id: string;
-  first_name: string;
-  last_name: string;
-  email: string | null;
-  phone: string | null;
+  org_id: string;
+  user_id: string;
+  role: UserRole;
+  joined_at: string;
+  user?: User;
+}
+
+export interface OrgInvite {
+  id: string;
+  org_id: string;
+  email: string;
+  role: UserRole;
+  invited_by: string;
+  status: InviteStatus;
+  token: string;
+  expires_at: string;
+  created_at: string;
+}
+
+export interface FieldDefinition {
+  id: string;
+  org_id: string;
+  entity_type: EntityType;
+  field_key: string;
+  label: string;
+  field_type: FieldType;
+  options: unknown;
+  default_value: string | null;
+  is_required: boolean;
+  display_order: number;
+  group_name: string | null;
+  show_on_report: boolean;
+  active: boolean;
+  description: string | null;
+  validation: unknown;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FieldValue {
+  id: string;
+  org_id: string;
+  field_definition_id: string;
+  entity_type: EntityType;
+  entity_id: string;
+  value_text: string | null;
+  value_numeric: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Jobsite {
+  id: string;
+  org_id: string;
+  name: string;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
   address_line1: string;
   address_line2: string | null;
   city: string;
@@ -40,23 +104,20 @@ export interface Customer {
   zip: string;
   lat: number | null;
   lng: number | null;
-  gate_code: string | null;
   access_notes: string | null;
-  pool_type: PoolType;
-  pool_volume_gallons: number | null;
-  service_day: DayOfWeek | null;
-  monthly_rate: number | null;
-  status: CustomerStatus;
+  status: string;
+  tags: string[];
   created_at: string;
   updated_at: string;
 }
 
 export interface Route {
   id: string;
+  org_id: string;
   name: string;
   technician_id: string;
   day_of_week: DayOfWeek;
-  optimized_order: string[];
+  optimized_order: unknown;
   total_estimated_minutes: number | null;
   total_distance_miles: number | null;
   created_at: string;
@@ -64,138 +125,136 @@ export interface Route {
   technician?: User;
 }
 
-export interface ServiceVisit {
+export interface Visit {
   id: string;
-  customer_id: string;
+  org_id: string;
+  jobsite_id: string;
   technician_id: string;
   route_id: string | null;
   scheduled_date: string;
+  scheduled_time: string | null;
   arrived_at: string | null;
   departed_at: string | null;
   arrived_lat: number | null;
   arrived_lng: number | null;
   departed_lat: number | null;
   departed_lng: number | null;
-  arrived_distance_meters?: number | null;
-  geofence_flagged?: boolean;
-  checklist?: Record<string, boolean> | null;
+  geofence_radius_meters: number | null;
+  geofence_verified: boolean | null;
   status: VisitStatus;
   notes: string | null;
+  duration_minutes: number | null;
   created_at: string;
   updated_at: string;
-  customer?: Customer;
+  jobsite?: Jobsite;
   technician?: User;
 }
 
-export interface ChemicalLog {
+export interface ServiceOrder {
   id: string;
-  visit_id: string;
-  chemical_name: string | null;
-  amount: number | null;
-  unit: ChemicalUnit | null;
-  ph_before: number | null;
-  ph_after: number | null;
-  chlorine_before: number | null;
-  chlorine_after: number | null;
-  alkalinity_before: number | null;
-  alkalinity_after: number | null;
-  cya_before: number | null;
-  cya_after: number | null;
-  calcium_hardness: number | null;
-  salt_level: number | null;
-  water_temp: number | null;
-  logged_at: string;
-}
-
-export interface VisitPhoto {
-  id: string;
-  visit_id: string;
-  storage_url: string;
-  caption: string | null;
-  photo_type: PhotoType;
-  lat: number | null;
-  lng: number | null;
-  taken_at: string | null;
-  uploaded_at: string;
-}
-
-export interface RepairRequest {
-  id: string;
+  org_id: string;
+  jobsite_id: string;
   visit_id: string | null;
-  customer_id: string;
-  requested_by: string;
-  category: RepairCategory;
-  description: string;
+  assigned_to: string | null;
+  requested_by: string | null;
+  title: string;
+  description: string | null;
   urgency: UrgencyLevel;
+  status: ServiceOrderStatus;
   estimated_cost: number | null;
-  status: RepairStatus;
-  photos: string[];
+  actual_cost: number | null;
+  scheduled_date: string | null;
+  completed_at: string | null;
+  tags: string[];
   created_at: string;
   updated_at: string;
-  customer?: Customer;
+  jobsite?: Jobsite;
+  assignee?: User;
   requester?: User;
 }
 
-export interface Quote {
+export interface Photo {
   id: string;
-  repair_request_id: string | null;
-  customer_id: string;
-  created_by: string;
-  line_items: Record<string, unknown>[];
-  subtotal: number;
-  tax_rate: number;
-  tax_amount: number;
-  total: number;
-  status: QuoteStatus;
-  valid_until: string | null;
-  stripe_invoice_id: string | null;
-  sent_at: string | null;
-  responded_at: string | null;
+  org_id: string;
+  entity_type: EntityType;
+  entity_id: string;
+  storage_url: string;
+  thumbnail_url: string | null;
+  caption: string | null;
+  tags: string[];
+  lat: number | null;
+  lng: number | null;
+  taken_at: string | null;
+  uploaded_by: string | null;
   created_at: string;
 }
 
-export interface Invoice {
+export interface Signature {
   id: string;
-  customer_id: string;
-  quote_id: string | null;
-  type: InvoiceType;
-  line_items: Record<string, unknown>[];
-  subtotal: number;
-  tax_rate: number;
-  tax_amount: number;
-  total: number;
-  status: InvoiceStatus;
-  stripe_invoice_id: string | null;
-  stripe_payment_intent_id: string | null;
-  due_date: string | null;
-  paid_at: string | null;
+  org_id: string;
+  entity_type: EntityType;
+  entity_id: string;
+  signer_name: string;
+  signer_email: string | null;
+  signer_role: string | null;
+  signature_url: string;
+  ip_address: string | null;
+  signed_at: string;
   created_at: string;
 }
 
-export interface EquipmentInventory {
+export interface Equipment {
   id: string;
-  customer_id: string;
-  equipment_type: EquipmentType;
+  org_id: string;
+  jobsite_id: string;
+  name: string;
+  equipment_type: string | null;
   brand: string | null;
   model: string | null;
   serial_number: string | null;
   install_date: string | null;
   warranty_expiry: string | null;
   last_serviced: string | null;
-  condition: EquipmentCondition;
+  condition: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export interface AuditLog {
+export interface Inventory {
   id: string;
-  user_id: string | null;
-  action: string;
-  table_name: string;
-  record_id: string | null;
-  old_data: Record<string, unknown> | null;
-  new_data: Record<string, unknown> | null;
-  ip_address: string | null;
+  org_id: string;
+  name: string;
+  sku: string | null;
+  category: string | null;
+  unit: string | null;
+  unit_cost: number | null;
+  quantity_on_hand: number;
+  reorder_point: number | null;
+  location_type: string;
+  location_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InventoryUsage {
+  id: string;
+  org_id: string;
+  inventory_id: string;
+  visit_id: string | null;
+  service_order_id: string | null;
+  quantity_used: number;
+  used_by: string | null;
+  notes: string | null;
+  used_at: string;
+}
+
+export interface IndustryTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  field_definitions: unknown;
+  default_settings: unknown;
   created_at: string;
 }

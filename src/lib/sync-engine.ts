@@ -122,13 +122,13 @@ async function syncPhotos(): Promise<SyncStatus> {
         continue;
       }
 
-      const fileName = `${photo.visit_id}/${Date.now()}_${photo.photo_type}.jpg`;
+      const fileName = `${photo.entity_type}/${photo.entity_id}/${Date.now()}.jpg`;
       const fileBase64 = await FileSystem.readAsStringAsync(photo.local_uri, {
         encoding: FileSystem.EncodingType.Base64,
       });
 
       const { error: uploadError } = await supabase.storage
-        .from("visit-photos")
+        .from("photos")
         .upload(fileName, decode(fileBase64), {
           contentType: "image/jpeg",
         });
@@ -136,15 +136,15 @@ async function syncPhotos(): Promise<SyncStatus> {
       if (uploadError) throw uploadError;
 
       const { data: urlData } = supabase.storage
-        .from("visit-photos")
+        .from("photos")
         .getPublicUrl(fileName);
 
       const { error: insertError } = await supabase
-        .from("visit_photos")
+        .from("photos")
         .insert({
-          visit_id: photo.visit_id,
+          entity_type: photo.entity_type,
+          entity_id: photo.entity_id,
           storage_url: urlData.publicUrl,
-          photo_type: photo.photo_type,
           caption: photo.caption,
           lat: photo.lat,
           lng: photo.lng,

@@ -6,29 +6,29 @@ import Link from 'next/link'
 import { KpiCards } from '@/components/dashboard/kpi-cards'
 import { ServiceFeed } from '@/components/dashboard/service-feed'
 import { Button } from '@/components/ui/button'
-import { UserPlus, Wrench, MapPin } from 'lucide-react'
+import { Building2, ClipboardList, MapPin } from 'lucide-react'
 
 export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-bold text-sand-900">Dashboard</h1>
-        <p className="text-sm text-sand-500">Overview of Aqua Palm Pool Service operations</p>
+        <p className="text-sm text-sand-500">Overview of your field service operations</p>
       </div>
 
       <KpiCards />
 
       <div className="flex flex-wrap gap-3">
-        <Link href="/dashboard/customers">
+        <Link href="/dashboard/jobsites">
           <Button variant="secondary" size="sm">
-            <UserPlus className="h-4 w-4" />
-            Add Customer
+            <Building2 className="h-4 w-4" />
+            Add Jobsite
           </Button>
         </Link>
-        <Link href="/dashboard/repairs">
+        <Link href="/dashboard/service-orders">
           <Button variant="secondary" size="sm">
-            <Wrench className="h-4 w-4" />
-            View Repair Queue
+            <ClipboardList className="h-4 w-4" />
+            Service Orders
           </Button>
         </Link>
         <Link href="/dashboard/routes">

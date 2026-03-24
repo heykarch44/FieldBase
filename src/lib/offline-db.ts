@@ -4,7 +4,7 @@ let db: SQLite.SQLiteDatabase | null = null;
 
 export async function getDb(): Promise<SQLite.SQLiteDatabase> {
   if (!db) {
-    db = await SQLite.openDatabaseAsync("aquapalm.db");
+    db = await SQLite.openDatabaseAsync("fieldbase.db");
     await initializeDb(db);
   }
   return db;
@@ -21,7 +21,7 @@ async function initializeDb(database: SQLite.SQLiteDatabase): Promise<void> {
       cached_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
-    CREATE TABLE IF NOT EXISTS cached_customers (
+    CREATE TABLE IF NOT EXISTS cached_jobsites (
       id TEXT PRIMARY KEY,
       data TEXT NOT NULL,
       cached_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -35,21 +35,28 @@ async function initializeDb(database: SQLite.SQLiteDatabase): Promise<void> {
 
     CREATE TABLE IF NOT EXISTS cached_equipment (
       id TEXT PRIMARY KEY,
-      customer_id TEXT NOT NULL,
+      jobsite_id TEXT NOT NULL,
       data TEXT NOT NULL,
       cached_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
-    CREATE TABLE IF NOT EXISTS cached_chemical_logs (
+    CREATE TABLE IF NOT EXISTS cached_field_definitions (
       id TEXT PRIMARY KEY,
-      visit_id TEXT NOT NULL,
+      org_id TEXT NOT NULL,
+      data TEXT NOT NULL,
+      cached_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS cached_field_values (
+      id TEXT PRIMARY KEY,
+      entity_id TEXT NOT NULL,
       data TEXT NOT NULL,
       cached_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS cached_photos (
       id TEXT PRIMARY KEY,
-      visit_id TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
       data TEXT NOT NULL,
       cached_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -68,8 +75,8 @@ async function initializeDb(database: SQLite.SQLiteDatabase): Promise<void> {
     CREATE TABLE IF NOT EXISTS photo_upload_queue (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       local_uri TEXT NOT NULL,
-      visit_id TEXT NOT NULL,
-      photo_type TEXT NOT NULL DEFAULT 'after',
+      entity_type TEXT NOT NULL DEFAULT 'visit',
+      entity_id TEXT NOT NULL,
       caption TEXT,
       lat REAL,
       lng REAL,
@@ -113,29 +120,29 @@ export async function getCachedRoutes<T>(): Promise<T[]> {
   return rows.map((r) => JSON.parse(r.data));
 }
 
-export async function cacheCustomers(customers: Array<{ id: string } & Record<string, unknown>>): Promise<void> {
+export async function cacheJobsites(jobsites: Array<{ id: string } & Record<string, unknown>>): Promise<void> {
   const database = await getDb();
-  await database.execAsync("DELETE FROM cached_customers");
-  for (const customer of customers) {
+  await database.execAsync("DELETE FROM cached_jobsites");
+  for (const jobsite of jobsites) {
     await database.runAsync(
-      "INSERT OR REPLACE INTO cached_customers (id, data) VALUES (?, ?)",
-      [customer.id, JSON.stringify(customer)]
+      "INSERT OR REPLACE INTO cached_jobsites (id, data) VALUES (?, ?)",
+      [jobsite.id, JSON.stringify(jobsite)]
     );
   }
 }
 
-export async function getCachedCustomers<T>(): Promise<T[]> {
+export async function getCachedJobsites<T>(): Promise<T[]> {
   const database = await getDb();
   const rows = await database.getAllAsync<{ data: string }>(
-    "SELECT data FROM cached_customers"
+    "SELECT data FROM cached_jobsites"
   );
   return rows.map((r) => JSON.parse(r.data));
 }
 
-export async function getCachedCustomer<T>(id: string): Promise<T | null> {
+export async function getCachedJobsite<T>(id: string): Promise<T | null> {
   const database = await getDb();
   const row = await database.getFirstAsync<{ data: string }>(
-    "SELECT data FROM cached_customers WHERE id = ?",
+    "SELECT data FROM cached_jobsites WHERE id = ?",
     [id]
   );
   return row ? JSON.parse(row.data) : null;
@@ -169,23 +176,45 @@ export async function updateCachedVisit(id: string, data: Record<string, unknown
 }
 
 export async function cacheEquipment(
-  equipment: Array<{ id: string; customer_id: string } & Record<string, unknown>>
+  equipment: Array<{ id: string; jobsite_id: string } & Record<string, unknown>>
 ): Promise<void> {
   const database = await getDb();
   await database.execAsync("DELETE FROM cached_equipment");
   for (const item of equipment) {
     await database.runAsync(
-      "INSERT OR REPLACE INTO cached_equipment (id, customer_id, data) VALUES (?, ?, ?)",
-      [item.id, item.customer_id, JSON.stringify(item)]
+      "INSERT OR REPLACE INTO cached_equipment (id, jobsite_id, data) VALUES (?, ?, ?)",
+      [item.id, item.jobsite_id, JSON.stringify(item)]
     );
   }
 }
 
-export async function getCachedEquipment<T>(customerId: string): Promise<T[]> {
+export async function getCachedEquipment<T>(jobsiteId: string): Promise<T[]> {
   const database = await getDb();
   const rows = await database.getAllAsync<{ data: string }>(
-    "SELECT data FROM cached_equipment WHERE customer_id = ?",
-    [customerId]
+    "SELECT data FROM cached_equipment WHERE jobsite_id = ?",
+    [jobsiteId]
+  );
+  return rows.map((r) => JSON.parse(r.data));
+}
+
+export async function cacheFieldDefinitions(
+  fields: Array<{ id: string; org_id: string } & Record<string, unknown>>
+): Promise<void> {
+  const database = await getDb();
+  await database.execAsync("DELETE FROM cached_field_definitions");
+  for (const field of fields) {
+    await database.runAsync(
+      "INSERT OR REPLACE INTO cached_field_definitions (id, org_id, data) VALUES (?, ?, ?)",
+      [field.id, field.org_id, JSON.stringify(field)]
+    );
+  }
+}
+
+export async function getCachedFieldDefinitions<T>(orgId: string): Promise<T[]> {
+  const database = await getDb();
+  const rows = await database.getAllAsync<{ data: string }>(
+    "SELECT data FROM cached_field_definitions WHERE org_id = ?",
+    [orgId]
   );
   return rows.map((r) => JSON.parse(r.data));
 }
@@ -242,8 +271,8 @@ export async function incrementRetry(id: number, error: string): Promise<void> {
 
 export async function enqueuePhotoUpload(params: {
   localUri: string;
-  visitId: string;
-  photoType: string;
+  entityType: string;
+  entityId: string;
   caption?: string;
   lat?: number;
   lng?: number;
@@ -251,12 +280,12 @@ export async function enqueuePhotoUpload(params: {
 }): Promise<void> {
   const database = await getDb();
   await database.runAsync(
-    `INSERT INTO photo_upload_queue (local_uri, visit_id, photo_type, caption, lat, lng, taken_at)
+    `INSERT INTO photo_upload_queue (local_uri, entity_type, entity_id, caption, lat, lng, taken_at)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [
       params.localUri,
-      params.visitId,
-      params.photoType,
+      params.entityType,
+      params.entityId,
       params.caption ?? null,
       params.lat ?? null,
       params.lng ?? null,
@@ -269,8 +298,8 @@ export async function getQueuedPhotos(): Promise<
   Array<{
     id: number;
     local_uri: string;
-    visit_id: string;
-    photo_type: string;
+    entity_type: string;
+    entity_id: string;
     caption: string | null;
     lat: number | null;
     lng: number | null;

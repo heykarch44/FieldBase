@@ -34,7 +34,6 @@ export default function RouteScreen() {
   }, [refresh]);
 
   const openNavigation = (lat: number, lng: number, label: string) => {
-    const scheme = Platform.OS === "ios" ? "maps:" : "geo:";
     const url =
       Platform.OS === "ios"
         ? `maps:?daddr=${lat},${lng}&q=${encodeURIComponent(label)}`
@@ -46,11 +45,11 @@ export default function RouteScreen() {
 
   const startRoute = () => {
     const firstStop = stops.find((s) => s.status === "scheduled");
-    if (firstStop?.customer.lat && firstStop?.customer.lng) {
+    if (firstStop?.jobsite.lat && firstStop?.jobsite.lng) {
       openNavigation(
-        firstStop.customer.lat,
-        firstStop.customer.lng,
-        `${firstStop.customer.first_name} ${firstStop.customer.last_name}`
+        firstStop.jobsite.lat,
+        firstStop.jobsite.lng,
+        firstStop.jobsite.name
       );
     }
   };
@@ -59,7 +58,7 @@ export default function RouteScreen() {
 
   const renderStop = ({ item }: { item: RouteStop }) => {
     const isExpanded = expandedStop === item.id;
-    const address = `${item.customer.address_line1}, ${item.customer.city}`;
+    const address = `${item.jobsite.address_line1}, ${item.jobsite.city}`;
 
     return (
       <TouchableOpacity
@@ -83,9 +82,7 @@ export default function RouteScreen() {
                 </Text>
               </View>
               <View style={styles.stopInfo}>
-                <Text style={styles.stopName}>
-                  {item.customer.first_name} {item.customer.last_name}
-                </Text>
+                <Text style={styles.stopName}>{item.jobsite.name}</Text>
                 <Text style={styles.stopAddress}>{address}</Text>
               </View>
             </View>
@@ -102,15 +99,7 @@ export default function RouteScreen() {
 
           {isExpanded && (
             <View style={styles.expandedSection}>
-              {item.customer.gate_code && (
-                <View style={styles.expandedRow}>
-                  <Ionicons name="key" size={16} color={Colors.amber[600]} />
-                  <Text style={styles.expandedText}>
-                    Gate: {item.customer.gate_code}
-                  </Text>
-                </View>
-              )}
-              {item.customer.access_notes && (
+              {item.jobsite.access_notes && (
                 <View style={styles.expandedRowStart}>
                   <Ionicons
                     name="information-circle"
@@ -118,26 +107,28 @@ export default function RouteScreen() {
                     color={Colors.aqua[600]}
                   />
                   <Text style={[styles.expandedText, styles.expandedTextFlex]}>
-                    {item.customer.access_notes}
+                    {item.jobsite.access_notes}
                   </Text>
                 </View>
               )}
-              <View style={styles.expandedRow}>
-                <Ionicons name="water" size={16} color={Colors.aqua[600]} />
-                <Text style={[styles.expandedText, styles.capitalizeText]}>
-                  {item.customer.pool_type} pool
-                  {item.customer.pool_volume_gallons
-                    ? ` · ${item.customer.pool_volume_gallons.toLocaleString()} gal`
-                    : ""}
-                </Text>
-              </View>
+              {item.jobsite.contact_name && (
+                <View style={styles.expandedRow}>
+                  <Ionicons name="person" size={16} color={Colors.gray[500]} />
+                  <Text style={styles.expandedText}>
+                    {item.jobsite.contact_name}
+                    {item.jobsite.contact_phone ? ` · ${item.jobsite.contact_phone}` : ""}
+                  </Text>
+                </View>
+              )}
               {item.equipment.length > 0 && (
                 <View style={styles.equipmentSection}>
                   <Text style={styles.equipmentLabel}>Equipment</Text>
                   {item.equipment.map((eq) => (
                     <Text key={eq.id} style={styles.equipmentItem}>
-                      {eq.brand} {eq.model} ({eq.equipment_type}) —{" "}
-                      {eq.condition}
+                      {eq.name}
+                      {eq.brand ? ` — ${eq.brand}` : ""}
+                      {eq.model ? ` ${eq.model}` : ""}
+                      {eq.condition ? ` (${eq.condition})` : ""}
                     </Text>
                   ))}
                 </View>
@@ -146,19 +137,19 @@ export default function RouteScreen() {
               <View style={styles.actionRow}>
                 <View style={styles.actionButtonFlex}>
                   <Button
-                    title={item.status === 'completed' ? 'Service Complete' : item.status === 'in_progress' ? 'Continue Service' : 'Start Service'}
+                    title={item.status === 'completed' ? 'View Visit' : item.status === 'in_progress' ? 'Continue Service' : 'Start Service'}
                     onPress={() => router.push(`/visit/${item.id}`)}
                     size="sm"
                     variant={item.status === 'completed' ? 'outline' : 'primary'}
                   />
                 </View>
-                {item.customer.lat && item.customer.lng && (
+                {item.jobsite.lat && item.jobsite.lng && (
                   <TouchableOpacity
                     onPress={() =>
                       openNavigation(
-                        item.customer.lat!,
-                        item.customer.lng!,
-                        `${item.customer.first_name} ${item.customer.last_name}`
+                        item.jobsite.lat!,
+                        item.jobsite.lng!,
+                        item.jobsite.name
                       )
                     }
                     style={styles.navigateButton}
@@ -179,10 +170,10 @@ export default function RouteScreen() {
   };
 
   const mapRegion =
-    stops.length > 0 && stops[0].customer.lat && stops[0].customer.lng
+    stops.length > 0 && stops[0].jobsite.lat && stops[0].jobsite.lng
       ? {
-          latitude: stops[0].customer.lat,
-          longitude: stops[0].customer.lng,
+          latitude: stops[0].jobsite.lat,
+          longitude: stops[0].jobsite.lng,
           latitudeDelta: 0.15,
           longitudeDelta: 0.15,
         }
@@ -194,15 +185,14 @@ export default function RouteScreen() {
         };
 
   const polylineCoords = stops
-    .filter((s) => s.customer.lat && s.customer.lng)
+    .filter((s) => s.jobsite.lat && s.jobsite.lng)
     .map((s) => ({
-      latitude: s.customer.lat!,
-      longitude: s.customer.lng!,
+      latitude: s.jobsite.lat!,
+      longitude: s.jobsite.lng!,
     }));
 
   return (
     <View style={styles.container}>
-      {/* Header Summary */}
       <View style={styles.header}>
         <View style={styles.headerInner}>
           <View>
@@ -268,16 +258,16 @@ export default function RouteScreen() {
             showsMyLocationButton
           >
             {stops.map((stop, index) => {
-              if (!stop.customer.lat || !stop.customer.lng) return null;
+              if (!stop.jobsite.lat || !stop.jobsite.lng) return null;
               return (
                 <Marker
                   key={stop.id}
                   coordinate={{
-                    latitude: stop.customer.lat,
-                    longitude: stop.customer.lng,
+                    latitude: stop.jobsite.lat,
+                    longitude: stop.jobsite.lng,
                   }}
-                  title={`${index + 1}. ${stop.customer.first_name} ${stop.customer.last_name}`}
-                  description={stop.customer.address_line1}
+                  title={`${index + 1}. ${stop.jobsite.name}`}
+                  description={stop.jobsite.address_line1}
                   pinColor={VisitStatusColors[stop.status]}
                   onCalloutPress={() => router.push(`/visit/${stop.id}`)}
                 />
@@ -300,14 +290,14 @@ export default function RouteScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f9fafb", // gray-50
+    backgroundColor: "#f9fafb",
   },
   header: {
     backgroundColor: "#ffffff",
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6", // gray-100
+    borderBottomColor: "#f3f4f6",
   },
   headerInner: {
     flexDirection: "row",
@@ -315,12 +305,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   routeName: {
-    color: "#111827", // gray-900
+    color: "#111827",
     fontWeight: "700",
     fontSize: 18,
   },
   completedCount: {
-    color: "#6b7280", // gray-500
+    color: "#6b7280",
     fontSize: 14,
   },
   headerActions: {
@@ -329,7 +319,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   viewToggle: {
-    backgroundColor: "#ecfeff", // aqua-50
+    backgroundColor: "#ecfeff",
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -365,12 +355,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   stopName: {
-    color: "#111827", // gray-900
+    color: "#111827",
     fontWeight: "700",
     fontSize: 16,
   },
   stopAddress: {
-    color: "#6b7280", // gray-500
+    color: "#6b7280",
     fontSize: 14,
     marginTop: 2,
   },
@@ -382,7 +372,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: "#f3f4f6", // gray-100
+    borderTopColor: "#f3f4f6",
   },
   expandedRow: {
     flexDirection: "row",
@@ -395,28 +385,25 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   expandedText: {
-    color: "#374151", // gray-700
+    color: "#374151",
     fontSize: 14,
     marginLeft: 8,
   },
   expandedTextFlex: {
     flex: 1,
   },
-  capitalizeText: {
-    textTransform: "capitalize",
-  },
   equipmentSection: {
     marginBottom: 12,
   },
   equipmentLabel: {
-    color: "#6b7280", // gray-500
+    color: "#6b7280",
     fontSize: 12,
     fontWeight: "600",
     textTransform: "uppercase",
     marginBottom: 4,
   },
   equipmentItem: {
-    color: "#4b5563", // gray-600
+    color: "#4b5563",
     fontSize: 14,
   },
   actionRow: {
@@ -428,7 +415,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   navigateButton: {
-    backgroundColor: "#f3f4f6", // gray-100
+    backgroundColor: "#f3f4f6",
     borderRadius: 12,
     paddingHorizontal: 16,
     alignItems: "center",

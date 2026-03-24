@@ -2,16 +2,15 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { formatCurrency } from '@/lib/utils'
 import { Card } from '@/components/ui/card'
 import { CardSkeleton } from '@/components/ui/skeleton'
-import { Users, Calendar, Wrench, DollarSign } from 'lucide-react'
+import { Building2, Calendar, ClipboardList, Users } from 'lucide-react'
 
 interface KpiData {
-  activeCustomers: number
+  activeJobsites: number
   todayVisits: { completed: number; total: number }
-  pendingRepairs: number
-  mrr: number
+  pendingOrders: number
+  teamMembers: number
 }
 
 export function KpiCards() {
@@ -23,35 +22,32 @@ export function KpiCards() {
       const supabase = createClient()
       const today = new Date().toISOString().split('T')[0]
 
-      const [customersRes, visitsRes, repairsRes, mrrRes] = await Promise.all([
+      const [jobsitesRes, visitsRes, ordersRes, membersRes] = await Promise.all([
         supabase
-          .from('customers')
+          .from('jobsites')
           .select('id', { count: 'exact', head: true })
           .eq('status', 'active'),
         supabase
-          .from('service_visits')
+          .from('visits')
           .select('id, status')
           .eq('scheduled_date', today),
         supabase
-          .from('repair_requests')
+          .from('service_orders')
           .select('id', { count: 'exact', head: true })
-          .eq('status', 'pending_review'),
+          .eq('status', 'pending'),
         supabase
-          .from('customers')
-          .select('monthly_rate')
-          .eq('status', 'active')
-          .not('monthly_rate', 'is', null),
+          .from('org_members')
+          .select('id', { count: 'exact', head: true }),
       ])
 
       const totalVisits = visitsRes.data?.length ?? 0
       const completedVisits = visitsRes.data?.filter((v) => v.status === 'completed').length ?? 0
-      const mrr = mrrRes.data?.reduce((sum, c) => sum + (Number(c.monthly_rate) || 0), 0) ?? 0
 
       setData({
-        activeCustomers: customersRes.count ?? 0,
+        activeJobsites: jobsitesRes.count ?? 0,
         todayVisits: { completed: completedVisits, total: totalVisits },
-        pendingRepairs: repairsRes.count ?? 0,
-        mrr,
+        pendingOrders: ordersRes.count ?? 0,
+        teamMembers: membersRes.count ?? 0,
       })
       setLoading(false)
     }
@@ -73,10 +69,10 @@ export function KpiCards() {
 
   const kpis = [
     {
-      label: 'Active Customers',
-      value: data.activeCustomers.toString(),
-      icon: Users,
-      color: 'text-aqua-600 bg-aqua-50',
+      label: 'Active Jobsites',
+      value: data.activeJobsites.toString(),
+      icon: Building2,
+      color: 'text-indigo-600 bg-indigo-50',
     },
     {
       label: "Today's Visits",
@@ -85,15 +81,15 @@ export function KpiCards() {
       color: 'text-emerald-600 bg-emerald-50',
     },
     {
-      label: 'Pending Repairs',
-      value: data.pendingRepairs.toString(),
-      icon: Wrench,
+      label: 'Pending Orders',
+      value: data.pendingOrders.toString(),
+      icon: ClipboardList,
       color: 'text-amber-600 bg-amber-50',
     },
     {
-      label: 'Monthly Revenue',
-      value: formatCurrency(data.mrr),
-      icon: DollarSign,
+      label: 'Team Members',
+      value: data.teamMembers.toString(),
+      icon: Users,
       color: 'text-violet-600 bg-violet-50',
     },
   ]

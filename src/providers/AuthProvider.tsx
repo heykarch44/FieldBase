@@ -3,11 +3,12 @@ import { Session } from "@supabase/supabase-js";
 import * as LocalAuthentication from "expo-local-authentication";
 import * as SecureStore from "expo-secure-store";
 import { supabase } from "../lib/supabase";
-import type { User } from "../types/database";
+import type { User, OrgMember } from "../types/database";
 
 interface AuthState {
   session: Session | null;
   user: User | null;
+  memberships: OrgMember[];
   loading: boolean;
   biometricEnabled: boolean;
   biometricAvailable: boolean;
@@ -23,32 +24,38 @@ interface AuthContextType extends AuthState {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const BIOMETRIC_KEY = "aqua_palm_biometric_enabled";
+const BIOMETRIC_KEY = "fieldbase_biometric_enabled";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>({
     session: null,
     user: null,
+    memberships: [],
     loading: true,
     biometricEnabled: false,
     biometricAvailable: false,
   });
 
-  const fetchUserProfile = useCallback(async (userId: string): Promise<User | null> => {
-    const { data, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("id", userId)
-      .single();
-    if (error || !data) return null;
-    return data as User;
+  const fetchUserProfile = useCallback(async (userId: string): Promise<{
+    user: User | null;
+    memberships: OrgMember[];
+  }> => {
+    const [userRes, memberRes] = await Promise.all([
+      supabase.from("users").select("*").eq("id", userId).single(),
+      supabase.from("org_members").select("*").eq("user_id", userId),
+    ]);
+
+    return {
+      user: userRes.data as User | null,
+      memberships: (memberRes.data as OrgMember[]) ?? [],
+    };
   }, []);
 
   const refreshUser = useCallback(async () => {
     if (!state.session?.user?.id) return;
-    const user = await fetchUserProfile(state.session.user.id);
+    const { user, memberships } = await fetchUserProfile(state.session.user.id);
     if (user) {
-      setState((prev) => ({ ...prev, user }));
+      setState((prev) => ({ ...prev, user, memberships }));
     }
   }, [state.session?.user?.id, fetchUserProfile]);
 
@@ -63,14 +70,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const { data: { session } } = await supabase.auth.getSession();
       let user: User | null = null;
+      let memberships: OrgMember[] = [];
       if (session?.user?.id) {
-        user = await fetchUserProfile(session.user.id);
+        const result = await fetchUserProfile(session.user.id);
+        user = result.user;
+        memberships = result.memberships;
       }
 
       if (mounted) {
         setState({
           session,
           user,
+          memberships,
           loading: false,
           biometricEnabled: bioEnabledStr === "true",
           biometricAvailable: bioAvailable,
@@ -83,11 +94,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         let user: User | null = null;
+        let memberships: OrgMember[] = [];
         if (session?.user?.id) {
-          user = await fetchUserProfile(session.user.id);
+          const result = await fetchUserProfile(session.user.id);
+          user = result.user;
+          memberships = result.memberships;
         }
         if (mounted) {
-          setState((prev) => ({ ...prev, session, user, loading: false }));
+          setState((prev) => ({ ...prev, session, user, memberships, loading: false }));
         }
       }
     );
@@ -106,13 +120,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
-    setState((prev) => ({ ...prev, session: null, user: null }));
+    setState((prev) => ({ ...prev, session: null, user: null, memberships: [] }));
   }, []);
 
   const authenticateWithBiometrics = useCallback(async (): Promise<boolean> => {
     if (!state.biometricAvailable || !state.biometricEnabled) return false;
     const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: "Unlock Aqua Palm",
+      promptMessage: "Unlock FieldBase",
       fallbackLabel: "Use password",
       disableDeviceFallback: false,
     });
