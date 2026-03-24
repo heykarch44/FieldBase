@@ -48,6 +48,38 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // If not logged in and on waitlist page, redirect to login
+  if (!user && pathname === '/waitlist') {
+    const url = request.nextUrl.clone()
+    url.pathname = '/login'
+    return NextResponse.redirect(url)
+  }
+
+  // If logged in and on waitlist page, check if org is now active
+  if (user && pathname === '/waitlist') {
+    const { data: profile } = await supabase
+      .from('users')
+      .select('active_org_id')
+      .eq('id', user.id)
+      .single()
+
+    if (profile?.active_org_id) {
+      const { data: org } = await supabase
+        .from('organizations')
+        .select('status')
+        .eq('id', profile.active_org_id)
+        .single()
+
+      if (org?.status === 'active') {
+        const url = request.nextUrl.clone()
+        url.pathname = '/dashboard'
+        return NextResponse.redirect(url)
+      }
+    }
+    // Still waitlisted — let them see the page
+    return supabaseResponse
+  }
+
   // If logged in and accessing dashboard, verify they belong to an org
   if (user && pathname.startsWith('/dashboard')) {
     const { data: profile } = await supabase
@@ -95,6 +127,19 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(url)
       }
 
+      // Check if org is on waitlist
+      const { data: org } = await supabase
+        .from('organizations')
+        .select('status')
+        .eq('id', activeOrgId)
+        .single()
+
+      if (org?.status === 'waitlist') {
+        const url = request.nextUrl.clone()
+        url.pathname = '/waitlist'
+        return NextResponse.redirect(url)
+      }
+
       // Technicians can only access limited pages (not settings/admin)
       const adminOnlyPaths = ['/dashboard/settings/fields', '/dashboard/settings/team', '/dashboard/settings/org']
       if (member.role === 'technician' && adminOnlyPaths.some(p => pathname.startsWith(p))) {
@@ -109,5 +154,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/login'],
+  matcher: ['/dashboard/:path*', '/login', '/waitlist'],
 }

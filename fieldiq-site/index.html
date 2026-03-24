@@ -1303,6 +1303,8 @@ a, button, [role="button"], input, textarea, select {
   margin-inline: auto;
 }
 </style>
+<!-- Supabase JS Client -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 <body>
 <!-- Skip Link -->
@@ -1335,7 +1337,7 @@ a, button, [role="button"], input, textarea, select {
       <button class="theme-toggle" data-theme-toggle aria-label="Switch to dark mode">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
-      <a href="#early-access" class="btn btn--primary btn--sm header__cta">Request Early Access</a>
+      <button onclick="openSignupModal()" class="btn btn--primary btn--sm header__cta">Request Early Access</button>
       <button class="mobile-menu-btn" aria-label="Open menu" aria-expanded="false" id="mobile-menu-btn">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
       </button>
@@ -1365,11 +1367,7 @@ a, button, [role="button"], input, textarea, select {
           <div class="hero__badge">Early Access — Now Open</div>
           <h1>Smarter Field Service Starts&nbsp;Here</h1>
           <p class="hero__sub">FieldIQ gives your team one platform to manage jobsites, dispatch crews, capture data, and track every service visit — built for any trade.</p>
-          <form class="hero__form" onsubmit="handleFormSubmit(event)">
-            <label for="hero-email" class="sr-only">Email address</label>
-            <input type="email" id="hero-email" placeholder="you@company.com" required>
-            <button type="submit" class="btn btn--primary">Request Early Access</button>
-          </form>
+          <button class="btn btn--primary btn--lg" onclick="openSignupModal()">Request Early Access</button>
           <p class="hero__trust">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
             Trusted by pool, HVAC, pest control, and 50+ other service trades
@@ -1650,12 +1648,8 @@ a, button, [role="button"], input, textarea, select {
     <div class="container cta-section__content">
       <h2>Ready to modernize your field operations?</h2>
       <p class="cta-section__sub">Join the waitlist. Be first to try FieldIQ.</p>
-      <form class="cta-form" onsubmit="handleFormSubmit(event)">
-        <label for="cta-email" class="sr-only">Email address</label>
-        <input type="email" id="cta-email" placeholder="you@company.com" required>
-        <button type="submit" class="btn btn--primary">Request Early Access</button>
-      </form>
-      <p class="cta-note">No credit card required. We'll notify you when access opens.</p>
+      <button class="btn btn--primary btn--lg" onclick="openSignupModal()">Request Early Access</button>
+      <p class="cta-note">No credit card required. Start free during early access.</p>
     </div>
   </section>
 
@@ -1704,7 +1698,271 @@ a, button, [role="button"], input, textarea, select {
   </div>
 </footer>
 
+<!-- ===== SIGNUP MODAL ===== -->
+<div id="signup-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title" style="display:none;">
+  <div class="modal-card">
+    <button class="modal-close" onclick="closeSignupModal()" aria-label="Close">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+
+    <!-- Step 1: Form -->
+    <div id="signup-step-form">
+      <h2 id="modal-title" class="modal-title">Create your FieldIQ account</h2>
+      <p class="modal-subtitle">Get early access. Set up your company in under a minute.</p>
+
+      <form id="signup-form" onsubmit="handleSignup(event)" class="modal-form">
+        <div class="form-group">
+          <label for="signup-name">Full Name</label>
+          <input type="text" id="signup-name" placeholder="John Smith" required autocomplete="name">
+        </div>
+        <div class="form-group">
+          <label for="signup-email">Work Email</label>
+          <input type="email" id="signup-email" placeholder="you@company.com" required autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label for="signup-password">Password</label>
+          <input type="password" id="signup-password" placeholder="Min 8 characters" required minlength="8" autocomplete="new-password">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="signup-company">Company Name</label>
+            <input type="text" id="signup-company" placeholder="Acme Services" required>
+          </div>
+          <div class="form-group">
+            <label for="signup-trade">Trade / Industry</label>
+            <select id="signup-trade" required>
+              <option value="" disabled selected>Select your trade</option>
+              <option value="pool_cleaning">Pool Service</option>
+              <option value="hood_cleaning">Hood &amp; Exhaust Cleaning</option>
+              <option value="cabinet_installation">Cabinet / Millwork</option>
+              <option value="hvac">HVAC</option>
+              <option value="pest_control">Pest Control</option>
+              <option value="duct_cleaning">Duct Cleaning</option>
+              <option value="blank">Other / Custom</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="signup-error" class="form-error" style="display:none;"></div>
+
+        <button type="submit" id="signup-btn" class="btn btn--primary btn--block">
+          Create Account
+        </button>
+      </form>
+      <p class="modal-fine">By signing up you agree to our Terms of Service and Privacy Policy.</p>
+    </div>
+
+    <!-- Step 2: Success -->
+    <div id="signup-step-success" style="display:none;" class="modal-success">
+      <div class="modal-success__icon">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      </div>
+      <h2 class="modal-title">You're on the list.</h2>
+      <p class="modal-subtitle">Your FieldIQ account is ready. We'll notify you when early access opens for your trade.</p>
+      <a href="https://wrk.fldiq.com/login" class="btn btn--primary btn--block">Go to Dashboard</a>
+      <p class="modal-fine">Bookmark <strong>wrk.fldiq.com</strong> — that's your dashboard.</p>
+    </div>
+  </div>
+</div>
+
+<style>
+/* ===== MODAL ===== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.modal-overlay.is-open {
+  opacity: 1;
+}
+
+.modal-card {
+  position: relative;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-8) var(--space-6);
+  max-width: 480px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  transform: translateY(12px) scale(0.98);
+  transition: transform 0.25s ease;
+}
+
+.modal-overlay.is-open .modal-card {
+  transform: translateY(0) scale(1);
+}
+
+.modal-close {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.modal-close:hover {
+  color: var(--color-text);
+  background: rgba(128, 128, 128, 0.1);
+}
+
+.modal-title {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 800;
+  color: var(--color-text);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.modal-subtitle {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-6) 0;
+  line-height: 1.5;
+}
+
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1;
+}
+
+.form-group label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.form-group input,
+.form-group select {
+  padding: var(--space-3) var(--space-3);
+  background: rgba(128, 128, 128, 0.08);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.form-group input::placeholder {
+  color: var(--color-text-secondary);
+  opacity: 0.5;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  background: rgba(128, 128, 128, 0.12);
+}
+
+.form-group select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%23888' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: var(--space-8);
+}
+
+.form-row {
+  display: flex;
+  gap: var(--space-4);
+}
+
+@media (max-width: 480px) {
+  .form-row { flex-direction: column; }
+}
+
+.form-error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  font-size: var(--text-sm);
+  color: #ef4444;
+}
+
+.btn--block {
+  width: 100%;
+  text-align: center;
+}
+
+.btn--lg {
+  padding: var(--space-4) var(--space-6);
+  font-size: var(--text-base);
+}
+
+.modal-fine {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  text-align: center;
+  margin-top: var(--space-4);
+  opacity: 0.7;
+}
+
+.modal-success {
+  text-align: center;
+  padding: var(--space-4) 0;
+}
+
+.modal-success__icon {
+  margin-bottom: var(--space-4);
+}
+
+.modal-success .modal-title {
+  margin-bottom: var(--space-3);
+}
+
+.modal-success .modal-subtitle {
+  margin-bottom: var(--space-6);
+}
+
+.modal-success .modal-fine {
+  margin-top: var(--space-4);
+}
+
+/* Dark mode select fix */
+[data-theme="dark"] .form-group select {
+  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%23aaa' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+[data-theme="dark"] .form-group select option {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+</style>
+
 <script>
+// ===== SUPABASE INIT =====
+const SUPABASE_URL = 'https://hrpoefcgzbdqsokejdok.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhycG9lZmNnemJkcXNva2VqZG9rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI4MTQ2MDcsImV4cCI6MjA1ODM5MDYwN30.bfWpHJCXQB-AxzuI-gIjCLGLXWBpXO_LO3WcCg1M8LA';
+const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 // ===== THEME TOGGLE =====
 (function(){
   const toggle = document.querySelector('[data-theme-toggle]');
@@ -1795,25 +2053,76 @@ function closeMobileNav() {
   }
 })();
 
-// ===== FORM HANDLER (UI only) =====
-function handleFormSubmit(e) {
-  e.preventDefault();
-  const input = e.target.querySelector('input[type="email"]');
-  const btn = e.target.querySelector('button[type="submit"]');
-  const originalText = btn.textContent;
-  
-  btn.textContent = 'Added to Waitlist ✓';
-  btn.style.background = '#059669';
-  input.value = '';
-  input.disabled = true;
-  btn.disabled = true;
-  
+// ===== SIGNUP MODAL =====
+const signupModal = document.getElementById('signup-modal');
+
+function openSignupModal() {
+  signupModal.style.display = 'flex';
+  signupModal.offsetHeight; // force reflow
+  signupModal.classList.add('is-open');
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => document.getElementById('signup-name')?.focus(), 200);
+}
+
+function closeSignupModal() {
+  signupModal.classList.remove('is-open');
+  document.body.style.overflow = '';
   setTimeout(() => {
-    btn.textContent = originalText;
-    btn.style.background = '';
-    input.disabled = false;
+    signupModal.style.display = 'none';
+    document.getElementById('signup-step-form').style.display = '';
+    document.getElementById('signup-step-success').style.display = 'none';
+    document.getElementById('signup-error').style.display = 'none';
+  }, 250);
+}
+
+signupModal.addEventListener('click', (e) => {
+  if (e.target === signupModal) closeSignupModal();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && signupModal.classList.contains('is-open')) closeSignupModal();
+});
+
+async function handleSignup(e) {
+  e.preventDefault();
+  const btn = document.getElementById('signup-btn');
+  const errorEl = document.getElementById('signup-error');
+  errorEl.style.display = 'none';
+
+  const fullName = document.getElementById('signup-name').value.trim();
+  const email = document.getElementById('signup-email').value.trim();
+  const password = document.getElementById('signup-password').value;
+  const companyName = document.getElementById('signup-company').value.trim();
+  const trade = document.getElementById('signup-trade').value;
+
+  btn.disabled = true;
+  btn.textContent = 'Creating account...';
+
+  try {
+    const { data, error } = await _supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+          company_name: companyName,
+          trade: trade
+        }
+      }
+    });
+
+    if (error) throw error;
+
+    // Show success step
+    document.getElementById('signup-step-form').style.display = 'none';
+    document.getElementById('signup-step-success').style.display = '';
+
+  } catch (err) {
+    errorEl.textContent = err.message || 'Something went wrong. Please try again.';
+    errorEl.style.display = 'block';
     btn.disabled = false;
-  }, 3000);
+    btn.textContent = 'Create Account';
+  }
 }
 
 // ===== SMOOTH SCROLL FOR ANCHOR LINKS =====
