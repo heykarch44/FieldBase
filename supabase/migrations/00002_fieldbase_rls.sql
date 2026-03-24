@@ -21,25 +21,40 @@ alter table inventory enable row level security;
 alter table inventory_usage enable row level security;
 
 -- Helper: get current user's active org_id (in public schema)
+-- Uses plpgsql SECURITY DEFINER + SET search_path to bypass RLS and avoid circular deps
 create or replace function public.active_org_id()
 returns uuid as $$
-  select active_org_id from public.users where id = auth.uid();
-$$ language sql security definer stable;
+declare
+  org_id uuid;
+begin
+  select u.active_org_id into org_id
+  from public.users u
+  where u.id = auth.uid();
+  return org_id;
+end;
+$$ language plpgsql security definer stable
+set search_path = '';
 
 -- Helper: check if user is member of org with minimum role (in public schema)
 create or replace function public.has_org_role(check_org_id uuid, min_role user_role)
 returns boolean as $$
+declare
+  found boolean;
+begin
   select exists(
     select 1 from public.org_members
     where org_id = check_org_id
     and user_id = auth.uid()
     and role <= min_role  -- enum ordering: owner < admin < manager < technician < viewer
-  );
-$$ language sql security definer stable;
+  ) into found;
+  return found;
+end;
+$$ language plpgsql security definer stable
+set search_path = '';
 
--- Organizations: members can view their orgs
+-- Organizations: members can view their active org
 create policy "org_select" on organizations for select using (
-  id in (select org_id from org_members where user_id = auth.uid())
+  id = public.active_org_id()
 );
 create policy "org_update" on organizations for update using (
   public.has_org_role(id, 'admin')
@@ -48,13 +63,14 @@ create policy "org_update" on organizations for update using (
 -- Users: can read own profile + can read other users in same org (for display names)
 create policy "users_select_own" on users for select using (
   id = auth.uid()
-  or id in (select user_id from org_members where org_id = public.active_org_id())
+  or id in (select user_id from public.org_members where org_id = public.active_org_id())
 );
 create policy "users_update_own" on users for update using (id = auth.uid());
 
--- Org Members: members can see other members in their org
+-- Org Members: members can see own row + other members in their active org
 create policy "members_select" on org_members for select using (
-  org_id in (select org_id from org_members where user_id = auth.uid())
+  user_id = auth.uid()
+  or org_id = public.active_org_id()
 );
 create policy "members_insert" on org_members for insert with check (
   public.has_org_role(org_id, 'admin')
