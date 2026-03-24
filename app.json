@@ -1,0 +1,84 @@
+{
+  "expo": {
+    "name": "Aqua Palm",
+    "slug": "aqua-palm-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "scheme": "aqua-palm",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0891B2"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.aquapalm.fieldapp",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Take photos of pool equipment and service work",
+        "NSLocationWhenInUseUsageDescription": "Record GPS location for arrive/depart timestamps",
+        "NSFaceIDUsageDescription": "Use Face ID for quick login"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundColor": "#0891B2"
+      },
+      "package": "com.aquapalm.fieldapp",
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Take photos of pool equipment and service work"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Record GPS location for arrive/depart timestamps"
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Use Face ID for quick login"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#0891B2"
+        }
+      ],
+      "expo-sqlite",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Select photos to attach to service visits"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "aqua-palm-field-app"
+      },
+      "router": {
+        "origin": false
+      }
+    }
+  }
+}

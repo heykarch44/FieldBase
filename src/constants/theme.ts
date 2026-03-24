@@ -1,0 +1,60 @@
+export const Colors = {
+  aqua: {
+    50: "#ecfeff",
+    100: "#cffafe",
+    200: "#a5f3fc",
+    300: "#67e8f9",
+    400: "#22d3ee",
+    500: "#06b6d4",
+    600: "#0891b2",
+    700: "#0e7490",
+    800: "#155e75",
+    900: "#164e63",
+    950: "#083344",
+  },
+  amber: {
+    50: "#fffbeb",
+    100: "#fef3c7",
+    200: "#fde68a",
+    300: "#fcd34d",
+    400: "#fbbf24",
+    500: "#f59e0b",
+    600: "#d97706",
+    700: "#b45309",
+    800: "#92400e",
+    900: "#78350f",
+    950: "#451a03",
+  },
+  gray: {
+    50: "#f9fafb",
+    100: "#f3f4f6",
+    200: "#e5e7eb",
+    300: "#d1d5db",
+    400: "#9ca3af",
+    500: "#6b7280",
+    600: "#4b5563",
+    700: "#374151",
+    800: "#1f2937",
+    900: "#111827",
+    950: "#030712",
+  },
+  white: "#ffffff",
+  black: "#000000",
+  success: "#16a34a",
+  error: "#dc2626",
+  warning: "#d97706",
+} as const;
+
+export const VisitStatusColors: Record<string, string> = {
+  scheduled: Colors.gray[400],
+  in_progress: Colors.aqua[600],
+  completed: Colors.success,
+  skipped: Colors.error,
+};
+
+export const UrgencyColors: Record<string, string> = {
+  low: Colors.gray[500],
+  medium: Colors.amber[600],
+  high: Colors.error,
+  emergency: "#7f1d1d",
+};
