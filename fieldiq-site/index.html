@@ -462,12 +462,32 @@ a, button, [role="button"], input, textarea, select {
   padding: var(--space-2) var(--space-4);
 }
 
+.header__signin {
+  display: none;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  transition: color var(--transition-interactive);
+}
+
+.header__signin:hover {
+  color: var(--color-text);
+}
+
 .header__cta {
   display: none;
 }
 
 @media (min-width: 768px) {
+  .header__signin { display: inline-flex; }
   .header__cta { display: inline-flex; }
+}
+
+.mobile-nav__signin {
+  color: var(--color-primary) !important;
+  margin-top: var(--space-4);
+  border-bottom: none !important;
 }
 
 /* ===== HERO ===== */
@@ -1337,6 +1357,7 @@ a, button, [role="button"], input, textarea, select {
       <button class="theme-toggle" data-theme-toggle aria-label="Switch to dark mode">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
+      <a href="https://wrk.fldiq.com/login" class="header__signin">Sign In</a>
       <button onclick="openSignupModal()" class="btn btn--primary btn--sm header__cta">Request Early Access</button>
       <button class="mobile-menu-btn" aria-label="Open menu" aria-expanded="false" id="mobile-menu-btn">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
@@ -1351,6 +1372,7 @@ a, button, [role="button"], input, textarea, select {
   <a href="#industries" onclick="closeMobileNav()">Industries</a>
   <a href="#how-it-works" onclick="closeMobileNav()">How It Works</a>
   <a href="#early-access" onclick="closeMobileNav()">Early Access</a>
+  <a href="https://wrk.fldiq.com/login" class="mobile-nav__signin">Sign In</a>
 </div>
 
 <!-- Main Content -->
@@ -1487,7 +1509,7 @@ a, button, [role="button"], input, textarea, select {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
             </div>
             <h3>Photos, Signatures &amp; Docs</h3>
-            <p>Capture before/after photos, collect signatures, and attach documents — all geotagged and timestamped.</p>
+            <p>Photos live in FieldIQ, not on personal phones. No more digging through texts or camera rolls — every image is geotagged, timestamped, and tied to the right job.</p>
           </div>
           <div class="feature-card stagger-child">
             <div class="feature-card__icon">
@@ -1633,8 +1655,8 @@ a, button, [role="button"], input, textarea, select {
           <div class="trust-card__icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
           </div>
-          <p>Your data is yours. Always.</p>
-          <span>We will never sell, share, or monetize your business data. You can export everything at any time.</span>
+          <p>Your data is yours. Download it anytime.</p>
+          <span>We will never sell, share, or monetize your data. Export everything whenever you want — we actually recommend it. Your business data belongs to you, period.</span>
         </div>
       </div>
     </div>
