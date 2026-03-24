@@ -19,6 +19,7 @@ import {
   Users,
   Building,
   ChevronsUpDown,
+  Shield,
 } from 'lucide-react'
 
 const navItems = [
@@ -41,6 +42,7 @@ export function Sidebar() {
   const router = useRouter()
   const supabase = createClient()
   const [org, setOrg] = useState<Organization | null>(null)
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false)
   const [showSettings, setShowSettings] = useState(
     pathname.startsWith('/dashboard/settings')
   )
@@ -52,9 +54,11 @@ export function Sidebar() {
 
       const { data: userData } = await supabase
         .from('users')
-        .select('active_org_id')
+        .select('active_org_id, is_super_admin')
         .eq('id', user.id)
         .single()
+
+      if (userData?.is_super_admin) setIsSuperAdmin(true)
 
       if (!userData?.active_org_id) return
 
@@ -154,7 +158,16 @@ export function Sidebar() {
         )}
       </nav>
 
-      <div className="border-t border-sand-200 p-3">
+      <div className="border-t border-sand-200 p-3 space-y-1">
+        {isSuperAdmin && (
+          <Link
+            href="/admin"
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-indigo-600 transition-colors hover:bg-indigo-50"
+          >
+            <Shield className="h-5 w-5" />
+            Admin Panel
+          </Link>
+        )}
         <button
           onClick={handleSignOut}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-sand-600 transition-colors hover:bg-sand-50 hover:text-sand-900"

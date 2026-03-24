@@ -12,12 +12,15 @@ export type EntityType = 'jobsite' | 'visit' | 'service_order' | 'inventory_item
 export type InviteStatus = 'pending' | 'accepted' | 'expired' | 'revoked';
 export type DocType = 'plan' | 'permit' | 'contract' | 'photo_report' | 'inspection' | 'other';
 
+export type OrgStatus = 'waitlist' | 'active' | 'suspended';
+
 export interface Organization {
   id: string;
   name: string;
   slug: string;
   template_id: string | null;
   plan: OrgPlan;
+  status: OrgStatus;
   logo_url: string | null;
   timezone: string;
   settings: Record<string, unknown>;
@@ -33,6 +36,7 @@ export interface User {
   phone: string | null;
   avatar_url: string | null;
   active_org_id: string | null;
+  is_super_admin: boolean;
   created_at: string;
   updated_at: string;
 }

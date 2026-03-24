@@ -48,6 +48,29 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // ADMIN ROUTE GUARD
+  if (pathname.startsWith('/admin')) {
+    if (!user) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      return NextResponse.redirect(url)
+    }
+
+    const { data: adminProfile } = await supabase
+      .from('users')
+      .select('is_super_admin')
+      .eq('id', user.id)
+      .single()
+
+    if (!adminProfile?.is_super_admin) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      return NextResponse.redirect(url)
+    }
+    // Super-admin verified — allow access
+    return supabaseResponse
+  }
+
   // If not logged in and on waitlist page, redirect to login
   if (!user && pathname === '/waitlist') {
     const url = request.nextUrl.clone()
@@ -154,5 +177,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/login', '/waitlist'],
+  matcher: ['/dashboard/:path*', '/login', '/waitlist', '/admin/:path*'],
 }
