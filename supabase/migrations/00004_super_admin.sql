@@ -1,59 +1,58 @@
 -- ============================================================
--- 00004: FieldIQ Super-Admin Role
+-- 00004 FIX: Super-Admin Role (replaces original 00004)
 -- ============================================================
--- Adds a platform-level super-admin flag to users.
--- Super-admins can manage all orgs, approve waitlist, etc.
--- This is separate from org-level roles (owner/admin/manager/etc).
+-- The original 00004 caused infinite recursion on the users table
+-- because the RLS policy on users queried users to check is_super_admin.
+-- Fix: use a SECURITY DEFINER function to bypass RLS when checking the flag.
 -- ============================================================
 
--- 1. Add super-admin flag (default false for all existing users)
-alter table users
-  add column is_super_admin boolean not null default false;
+-- 1. Add super-admin flag (skip if already exists from partial run)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'users' AND column_name = 'is_super_admin'
+  ) THEN
+    ALTER TABLE users ADD COLUMN is_super_admin boolean NOT NULL DEFAULT false;
+  END IF;
+END $$;
 
 -- 2. Mark your account as super-admin
--- (Replace the email below if needed)
-update users set is_super_admin = true where email = 'heykarch44@gmail.com';
+UPDATE users SET is_super_admin = true WHERE email = 'heykarch44@gmail.com';
 
--- 3. RLS policy: super-admins can read all organizations
-create policy "super_admins_read_all_orgs"
-  on organizations for select
-  using (
-    exists (
-      select 1 from users
-      where users.id = auth.uid()
-        and users.is_super_admin = true
-    )
-  );
+-- 3. SECURITY DEFINER function to check super-admin without hitting RLS
+CREATE OR REPLACE FUNCTION public.is_super_admin()
+RETURNS boolean AS $$
+DECLARE
+  result boolean;
+BEGIN
+  SELECT u.is_super_admin INTO result
+  FROM public.users u
+  WHERE u.id = auth.uid();
+  RETURN COALESCE(result, false);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE
+SET search_path = '';
 
--- 4. RLS policy: super-admins can update any organization (status, plan, etc)
-create policy "super_admins_update_all_orgs"
-  on organizations for update
-  using (
-    exists (
-      select 1 from users
-      where users.id = auth.uid()
-        and users.is_super_admin = true
-    )
-  );
+-- 4. Drop the broken policies from original 00004 (if they exist)
+DROP POLICY IF EXISTS "super_admins_read_all_orgs" ON organizations;
+DROP POLICY IF EXISTS "super_admins_update_all_orgs" ON organizations;
+DROP POLICY IF EXISTS "super_admins_read_all_users" ON users;
+DROP POLICY IF EXISTS "super_admins_read_all_org_members" ON org_members;
 
--- 5. RLS policy: super-admins can read all users
-create policy "super_admins_read_all_users"
-  on users for select
-  using (
-    exists (
-      select 1 from users u
-      where u.id = auth.uid()
-        and u.is_super_admin = true
-    )
-  );
+-- 5. Recreate policies using the safe helper function
+CREATE POLICY "super_admins_read_all_orgs"
+  ON organizations FOR SELECT
+  USING (public.is_super_admin());
 
--- 6. RLS policy: super-admins can read all org_members
-create policy "super_admins_read_all_org_members"
-  on org_members for select
-  using (
-    exists (
-      select 1 from users
-      where users.id = auth.uid()
-        and users.is_super_admin = true
-    )
-  );
+CREATE POLICY "super_admins_update_all_orgs"
+  ON organizations FOR UPDATE
+  USING (public.is_super_admin());
+
+CREATE POLICY "super_admins_read_all_users"
+  ON users FOR SELECT
+  USING (public.is_super_admin());
+
+CREATE POLICY "super_admins_read_all_org_members"
+  ON org_members FOR SELECT
+  USING (public.is_super_admin());
