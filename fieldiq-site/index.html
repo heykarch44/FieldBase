@@ -1,0 +1,1778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!--
+   ______                            __
+  / ____/___  ____ ___  ____  __  __/ /____  _____
+ / /   / __ \/ __ `__ \/ __ \/ / / / __/ _ \/ ___/
+/ /___/ /_/ / / / / / / /_/ / /_/ / /_/  __/ /
+\____/\____/_/ /_/ /_/ .___/\__,_/\__/\___/_/
+                    /_/
+        Created with Perplexity Computer
+        https://www.perplexity.ai/computer
+-->
+
+<!-- Perplexity Computer Attribution — SEO Meta Tags -->
+<meta name="generator" content="Perplexity Computer">
+<meta name="author" content="Perplexity Computer">
+<meta property="og:see_also" content="https://www.perplexity.ai/computer">
+<link rel="author" href="https://www.perplexity.ai/computer">
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FieldIQ — Smarter Field Service Management</title>
+<meta name="description" content="FieldIQ gives your team one platform to manage jobsites, dispatch crews, capture data, and track every service visit — built for any trade.">
+<meta property="og:title" content="FieldIQ — Smarter Field Service Management">
+<meta property="og:description" content="One platform to manage jobsites, dispatch crews, capture data, and track every service visit — built for any trade.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://fldiq.com">
+<meta property="og:image" content="./assets/hero-bg.png">
+<meta name="twitter:card" content="summary_large_image">
+
+<!-- Fonts: Cabinet Grotesk (display) + Satoshi (body) from Fontshare -->
+<link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@700,800,900&f[]=satoshi@300,400,500,700&display=swap" rel="stylesheet">
+
+<!-- Favicon -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230d9488'/%3E%3Cpath d='M8 8h6v16H8zM18 8h6v10h-6z' fill='white'/%3E%3Ccircle cx='21' cy='24' r='3' fill='white'/%3E%3C/svg%3E">
+
+<style>
+/* ===== RESET & BASE ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  -moz-text-size-adjust: none;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  scroll-behavior: smooth;
+  scroll-padding-top: 5rem;
+}
+
+/* ===== DESIGN TOKENS ===== */
+:root {
+  /* Type Scale */
+  --text-xs:   clamp(0.75rem,  0.7rem  + 0.25vw, 0.875rem);
+  --text-sm:   clamp(0.875rem, 0.8rem  + 0.35vw, 1rem);
+  --text-base: clamp(1rem,     0.95rem + 0.25vw, 1.125rem);
+  --text-lg:   clamp(1.125rem, 1rem    + 0.75vw, 1.5rem);
+  --text-xl:   clamp(1.5rem,   1.2rem  + 1.25vw, 2.25rem);
+  --text-2xl:  clamp(2rem,     1.2rem  + 2.5vw,  3.5rem);
+  --text-3xl:  clamp(2.5rem,   1rem    + 4vw,    5rem);
+
+  /* Spacing */
+  --space-1:  0.25rem;
+  --space-2:  0.5rem;
+  --space-3:  0.75rem;
+  --space-4:  1rem;
+  --space-5:  1.25rem;
+  --space-6:  1.5rem;
+  --space-8:  2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+  --space-24: 6rem;
+  --space-32: 8rem;
+
+  /* Radius */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-full: 9999px;
+
+  /* Transitions */
+  --transition-interactive: 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Content widths */
+  --content-narrow: 640px;
+  --content-default: 960px;
+  --content-wide: 1200px;
+
+  /* Fonts */
+  --font-display: 'Cabinet Grotesk', 'Helvetica Neue', sans-serif;
+  --font-body: 'Satoshi', 'Inter', sans-serif;
+}
+
+/* ===== LIGHT MODE (default) ===== */
+:root, [data-theme="light"] {
+  --color-bg: #f8fafc;
+  --color-surface: #ffffff;
+  --color-surface-2: #f1f5f9;
+  --color-surface-offset: #e2e8f0;
+  --color-divider: #cbd5e1;
+  --color-border: #e2e8f0;
+  --color-text: #0f172a;
+  --color-text-muted: #64748b;
+  --color-text-faint: #94a3b8;
+  --color-text-inverse: #f8fafc;
+  --color-primary: #0d9488;
+  --color-primary-hover: #0f766e;
+  --color-primary-active: #115e59;
+  --color-primary-subtle: rgba(13, 148, 136, 0.08);
+  --color-hero-bg: #0f172a;
+  --color-hero-surface: rgba(15, 23, 42, 0.6);
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.12);
+}
+
+/* ===== DARK MODE ===== */
+[data-theme="dark"] {
+  --color-bg: #0c1222;
+  --color-surface: #131b2e;
+  --color-surface-2: #1a2340;
+  --color-surface-offset: #1e293b;
+  --color-divider: #1e293b;
+  --color-border: #334155;
+  --color-text: #e2e8f0;
+  --color-text-muted: #94a3b8;
+  --color-text-faint: #64748b;
+  --color-text-inverse: #0f172a;
+  --color-primary: #2dd4bf;
+  --color-primary-hover: #5eead4;
+  --color-primary-active: #99f6e4;
+  --color-primary-subtle: rgba(45, 212, 191, 0.1);
+  --color-hero-bg: #060a14;
+  --color-hero-surface: rgba(6, 10, 20, 0.7);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-bg: #0c1222;
+    --color-surface: #131b2e;
+    --color-surface-2: #1a2340;
+    --color-surface-offset: #1e293b;
+    --color-divider: #1e293b;
+    --color-border: #334155;
+    --color-text: #e2e8f0;
+    --color-text-muted: #94a3b8;
+    --color-text-faint: #64748b;
+    --color-text-inverse: #0f172a;
+    --color-primary: #2dd4bf;
+    --color-primary-hover: #5eead4;
+    --color-primary-active: #99f6e4;
+    --color-primary-subtle: rgba(45, 212, 191, 0.1);
+    --color-hero-bg: #060a14;
+    --color-hero-surface: rgba(6, 10, 20, 0.7);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* ===== BASE STYLES ===== */
+body {
+  min-height: 100dvh;
+  line-height: 1.6;
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  color: var(--color-text);
+  background-color: var(--color-bg);
+}
+
+img, picture, video, canvas, svg { display: block; max-width: 100%; height: auto; }
+ul[role="list"], ol[role="list"] { list-style: none; }
+input, button, textarea, select { font: inherit; color: inherit; }
+h1, h2, h3, h4, h5, h6 { text-wrap: balance; line-height: 1.15; font-family: var(--font-display); }
+p, li, figcaption { text-wrap: pretty; max-width: 72ch; }
+
+::selection {
+  background: rgba(13, 148, 136, 0.25);
+  color: var(--color-text);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+button { cursor: pointer; background: none; border: none; }
+
+a, button, [role="button"], input, textarea, select {
+  transition: color var(--transition-interactive),
+              background var(--transition-interactive),
+              border-color var(--transition-interactive),
+              box-shadow var(--transition-interactive);
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border-width: 0;
+}
+
+/* ===== LAYOUT ===== */
+.container {
+  width: 100%;
+  max-width: var(--content-wide);
+  margin: 0 auto;
+  padding-inline: var(--space-6);
+}
+
+@media (min-width: 768px) {
+  .container { padding-inline: var(--space-8); }
+}
+
+/* ===== HEADER / NAV ===== */
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding: var(--space-4) 0;
+  background: transparent;
+  transition: background 0.3s var(--ease-out), box-shadow 0.3s var(--ease-out), padding 0.3s var(--ease-out);
+}
+
+.header--scrolled {
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05);
+  padding: var(--space-3) 0;
+}
+
+[data-theme="light"] .header--scrolled,
+:root:not([data-theme]) .header--scrolled {
+  background: rgba(248, 250, 252, 0.92);
+  box-shadow: var(--shadow-sm);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .header--scrolled {
+    background: rgba(12, 18, 34, 0.92);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+}
+
+.header__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.header__logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  text-decoration: none;
+  color: #fff;
+  transition: opacity var(--transition-interactive);
+}
+
+.header--scrolled .header__logo {
+  color: var(--color-text);
+}
+
+.header__logo:hover { opacity: 0.8; }
+
+.header__logo-text {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.header__nav {
+  display: none;
+  align-items: center;
+  gap: var(--space-8);
+  list-style: none;
+}
+
+@media (min-width: 768px) {
+  .header__nav { display: flex; }
+}
+
+.header__nav a {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  text-decoration: none;
+  transition: color var(--transition-interactive);
+}
+
+.header--scrolled .header__nav a {
+  color: var(--color-text-muted);
+}
+
+.header__nav a:hover {
+  color: #fff;
+}
+
+.header--scrolled .header__nav a:hover {
+  color: var(--color-text);
+}
+
+.header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.theme-toggle {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  color: rgba(255, 255, 255, 0.7);
+  transition: color var(--transition-interactive), background var(--transition-interactive);
+}
+
+.header--scrolled .theme-toggle {
+  color: var(--color-text-muted);
+}
+
+.theme-toggle:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.header--scrolled .theme-toggle:hover {
+  color: var(--color-text);
+  background: var(--color-primary-subtle);
+}
+
+/* Mobile menu button */
+.mobile-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  color: rgba(255, 255, 255, 0.7);
+  border-radius: var(--radius-md);
+}
+
+.header--scrolled .mobile-menu-btn {
+  color: var(--color-text-muted);
+}
+
+@media (min-width: 768px) {
+  .mobile-menu-btn { display: none; }
+}
+
+/* Mobile nav */
+.mobile-nav {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 99;
+  background: var(--color-hero-bg);
+  padding: var(--space-24) var(--space-6) var(--space-6);
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.mobile-nav.is-open {
+  display: flex;
+}
+
+.mobile-nav a {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.8);
+  text-decoration: none;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  transition: color var(--transition-interactive);
+}
+
+.mobile-nav a:hover { color: var(--color-primary); }
+
+/* ===== BUTTONS ===== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-6);
+  cursor: pointer;
+  transition: background var(--transition-interactive),
+              color var(--transition-interactive),
+              transform var(--transition-interactive),
+              box-shadow var(--transition-interactive);
+}
+
+.btn:hover { transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
+
+.btn--primary {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.btn--primary:hover {
+  background: var(--color-primary-hover);
+  box-shadow: 0 4px 14px rgba(13, 148, 136, 0.3);
+}
+
+.btn--primary:active {
+  background: var(--color-primary-active);
+}
+
+.btn--outline {
+  background: transparent;
+  color: var(--color-primary);
+  border: 1.5px solid var(--color-primary);
+}
+
+.btn--outline:hover {
+  background: var(--color-primary-subtle);
+}
+
+.btn--lg {
+  font-size: var(--text-base);
+  padding: var(--space-4) var(--space-8);
+  border-radius: var(--radius-lg);
+}
+
+.btn--sm {
+  font-size: var(--text-xs);
+  padding: var(--space-2) var(--space-4);
+}
+
+.header__cta {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .header__cta { display: inline-flex; }
+}
+
+/* ===== HERO ===== */
+.hero {
+  position: relative;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  background: var(--color-hero-bg);
+  overflow: hidden;
+}
+
+.hero__bg {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.hero__bg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.35;
+}
+
+.hero__bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.3) 0%, rgba(15, 23, 42, 0.8) 100%);
+}
+
+.hero__content {
+  position: relative;
+  z-index: 2;
+  padding: clamp(var(--space-24), 12vw, var(--space-32)) 0 clamp(var(--space-16), 8vw, var(--space-24));
+  width: 100%;
+}
+
+.hero__content .container {
+  display: grid;
+  gap: var(--space-10);
+}
+
+@media (min-width: 1024px) {
+  .hero__content .container {
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    gap: var(--space-16);
+  }
+}
+
+.hero__text { max-width: 600px; }
+
+.hero__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-4);
+  border-radius: var(--radius-full);
+  background: rgba(13, 148, 136, 0.15);
+  border: 1px solid rgba(13, 148, 136, 0.3);
+  color: #5eead4;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  margin-bottom: var(--space-6);
+  letter-spacing: 0.03em;
+}
+
+.hero__badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #2dd4bf;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.hero h1 {
+  font-size: var(--text-3xl);
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  margin-bottom: var(--space-6);
+}
+
+.hero__sub {
+  font-size: var(--text-base);
+  color: rgba(226, 232, 240, 0.75);
+  line-height: 1.7;
+  max-width: 520px;
+  margin-bottom: var(--space-8);
+}
+
+.hero__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 480px;
+}
+
+@media (min-width: 640px) {
+  .hero__form {
+    flex-direction: row;
+  }
+}
+
+.hero__form input[type="email"] {
+  flex: 1;
+  padding: var(--space-3) var(--space-4);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-md);
+  color: #fff;
+  font-size: var(--text-sm);
+  min-width: 0;
+}
+
+.hero__form input[type="email"]::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.hero__form input[type="email"]:focus {
+  border-color: var(--color-primary);
+  background: rgba(255, 255, 255, 0.12);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.2);
+}
+
+.hero__trust {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  font-size: var(--text-xs);
+  color: rgba(148, 163, 184, 0.7);
+}
+
+.hero__trust svg {
+  width: 14px;
+  height: 14px;
+  display: inline;
+  flex-shrink: 0;
+}
+
+/* Hero right side — visual element */
+.hero__visual {
+  display: none;
+  position: relative;
+}
+
+@media (min-width: 1024px) {
+  .hero__visual { display: block; }
+}
+
+.hero__visual-card {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  position: relative;
+}
+
+.hero__visual-card::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 20%;
+  right: 20%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(45, 212, 191, 0.5), transparent);
+}
+
+.hero__stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.hero__stat {
+  text-align: center;
+  padding: var(--space-4);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.hero__stat-value {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 800;
+  color: #2dd4bf;
+  letter-spacing: -0.02em;
+}
+
+.hero__stat-label {
+  font-size: var(--text-xs);
+  color: rgba(148, 163, 184, 0.6);
+  margin-top: var(--space-1);
+}
+
+.hero__trades {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.hero__trade-tag {
+  padding: var(--space-1) var(--space-3);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  color: rgba(226, 232, 240, 0.6);
+}
+
+/* ===== SECTION SPACING ===== */
+.section {
+  padding-block: clamp(var(--space-16), 8vw, var(--space-32));
+}
+
+.section--alt {
+  background: var(--color-surface);
+}
+
+.section__header {
+  max-width: 680px;
+  margin-bottom: clamp(var(--space-10), 5vw, var(--space-16));
+}
+
+.section__header--center {
+  text-align: center;
+  margin-inline: auto;
+}
+
+.section__label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-primary);
+  margin-bottom: var(--space-3);
+}
+
+.section__title {
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+  margin-bottom: var(--space-4);
+}
+
+.section__subtitle {
+  font-size: var(--text-base);
+  color: var(--color-text-muted);
+  line-height: 1.7;
+}
+
+/* ===== PROBLEMS SECTION ===== */
+.problems-grid {
+  display: grid;
+  gap: var(--space-6);
+}
+
+@media (min-width: 768px) {
+  .problems-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.problem-card {
+  padding: var(--space-8);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  transition: box-shadow var(--transition-interactive), transform var(--transition-interactive);
+}
+
+.section--alt .problem-card {
+  background: var(--color-bg);
+}
+
+.problem-card__icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-5);
+  color: var(--color-primary);
+}
+
+.problem-card__icon svg {
+  width: 28px;
+  height: 28px;
+}
+
+.problem-card h3 {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  margin-bottom: var(--space-3);
+  color: var(--color-text);
+}
+
+.problem-card p {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  line-height: 1.65;
+}
+
+/* ===== FEATURES SECTION ===== */
+.features-layout {
+  display: grid;
+  gap: clamp(var(--space-8), 4vw, var(--space-12));
+}
+
+@media (min-width: 1024px) {
+  .features-layout {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
+
+.features-visual {
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+}
+
+.features-visual img {
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+}
+
+@media (min-width: 1024px) {
+  .features-visual {
+    position: sticky;
+    top: 6rem;
+  }
+}
+
+.features-grid {
+  display: grid;
+  gap: var(--space-6);
+}
+
+@media (min-width: 640px) {
+  .features-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.feature-card {
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  transition: box-shadow var(--transition-interactive), border-color var(--transition-interactive);
+}
+
+.feature-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-primary);
+}
+
+.feature-card__icon {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-4);
+  color: var(--color-primary);
+}
+
+.feature-card__icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.feature-card h3 {
+  font-size: var(--text-base);
+  font-weight: 700;
+  margin-bottom: var(--space-2);
+  color: var(--color-text);
+}
+
+.feature-card p {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+
+/* ===== INDUSTRIES SECTION ===== */
+.industries-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-8);
+}
+
+.industry-tag {
+  padding: var(--space-2) var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text);
+  transition: border-color var(--transition-interactive), background var(--transition-interactive), color var(--transition-interactive);
+  cursor: default;
+}
+
+.industry-tag:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+}
+
+.industry-tag--special {
+  border-style: dashed;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.industries-sub {
+  font-size: var(--text-base);
+  color: var(--color-text-muted);
+  line-height: 1.7;
+  max-width: 600px;
+}
+
+/* ===== HOW IT WORKS ===== */
+.steps {
+  display: grid;
+  gap: var(--space-8);
+  counter-reset: step;
+}
+
+@media (min-width: 768px) {
+  .steps {
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-6);
+  }
+}
+
+.step {
+  counter-increment: step;
+  position: relative;
+  padding: var(--space-8) var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  text-align: left;
+}
+
+@media (min-width: 768px) {
+  .step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: calc(-1 * var(--space-3) - 1px);
+    width: var(--space-6);
+    height: 2px;
+    background: var(--color-border);
+    transform: translateY(-50%);
+  }
+}
+
+.step__number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  margin-bottom: var(--space-5);
+}
+
+.step__number::before {
+  content: counter(step);
+}
+
+.step h3 {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: var(--space-2);
+}
+
+.step p {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+
+/* ===== SOCIAL PROOF ===== */
+.trust-grid {
+  display: grid;
+  gap: var(--space-6);
+}
+
+@media (min-width: 768px) {
+  .trust-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.trust-card {
+  padding: var(--space-8);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  position: relative;
+}
+
+.trust-card__icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-5);
+  color: var(--color-primary);
+}
+
+.trust-card__icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.trust-card p {
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--color-text);
+  line-height: 1.5;
+}
+
+.trust-card span {
+  display: block;
+  margin-top: var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+/* ===== FINAL CTA ===== */
+.cta-section {
+  position: relative;
+  background: var(--color-hero-bg);
+  overflow: hidden;
+}
+
+.cta-section__bg {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.cta-section__bg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.2;
+}
+
+.cta-section__bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.5) 0%, rgba(15, 23, 42, 0.9) 100%);
+}
+
+.cta-section__content {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.cta-section h2 {
+  font-size: var(--text-2xl);
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: -0.02em;
+  margin-bottom: var(--space-4);
+}
+
+.cta-section__sub {
+  font-size: var(--text-base);
+  color: rgba(226, 232, 240, 0.7);
+  margin-bottom: var(--space-8);
+}
+
+.cta-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 440px;
+  margin: 0 auto var(--space-4);
+}
+
+@media (min-width: 640px) {
+  .cta-form { flex-direction: row; }
+}
+
+.cta-form input[type="email"] {
+  flex: 1;
+  padding: var(--space-3) var(--space-4);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-md);
+  color: #fff;
+  font-size: var(--text-sm);
+  min-width: 0;
+}
+
+.cta-form input[type="email"]::placeholder { color: rgba(255, 255, 255, 0.4); }
+
+.cta-form input[type="email"]:focus {
+  border-color: var(--color-primary);
+  background: rgba(255, 255, 255, 0.12);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.2);
+}
+
+.cta-note {
+  font-size: var(--text-xs);
+  color: rgba(148, 163, 184, 0.5);
+}
+
+/* ===== FOOTER ===== */
+.footer {
+  background: var(--color-hero-bg);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding: var(--space-12) 0 var(--space-8);
+}
+
+.footer__inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+@media (min-width: 768px) {
+  .footer__inner {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+}
+
+.footer__brand {
+  max-width: 300px;
+}
+
+.footer__logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: #fff;
+  text-decoration: none;
+  margin-bottom: var(--space-4);
+}
+
+.footer__logo-text {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.footer__desc {
+  font-size: var(--text-sm);
+  color: rgba(148, 163, 184, 0.6);
+  line-height: 1.6;
+}
+
+.footer__links {
+  display: flex;
+  gap: var(--space-10);
+}
+
+.footer__links-col h4 {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: var(--space-4);
+}
+
+.footer__links-col ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.footer__links-col a {
+  font-size: var(--text-sm);
+  color: rgba(148, 163, 184, 0.7);
+  text-decoration: none;
+  transition: color var(--transition-interactive);
+}
+
+.footer__links-col a:hover { color: #fff; }
+
+.footer__bottom {
+  margin-top: var(--space-10);
+  padding-top: var(--space-6);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: center;
+  text-align: center;
+}
+
+@media (min-width: 768px) {
+  .footer__bottom {
+    flex-direction: row;
+    justify-content: space-between;
+    text-align: left;
+  }
+}
+
+.footer__copyright {
+  font-size: var(--text-xs);
+  color: rgba(148, 163, 184, 0.4);
+}
+
+.footer__attribution a {
+  font-size: var(--text-xs);
+  color: rgba(148, 163, 184, 0.4);
+  text-decoration: none;
+  transition: color var(--transition-interactive);
+}
+
+.footer__attribution a:hover { color: rgba(148, 163, 184, 0.7); }
+
+/* ===== SCROLL ANIMATIONS ===== */
+.fade-in {
+  opacity: 1;
+}
+
+@supports (animation-timeline: scroll()) {
+  .fade-in {
+    opacity: 0;
+    animation: reveal-fade linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 80%;
+  }
+}
+
+@keyframes reveal-fade {
+  to { opacity: 1; }
+}
+
+/* JS fallback for scroll animations */
+.js-reveal {
+  opacity: 0;
+  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.js-reveal.is-visible {
+  opacity: 1;
+}
+
+/* Stagger children */
+.js-reveal.is-visible .stagger-child:nth-child(1) { transition-delay: 0ms; }
+.js-reveal.is-visible .stagger-child:nth-child(2) { transition-delay: 60ms; }
+.js-reveal.is-visible .stagger-child:nth-child(3) { transition-delay: 120ms; }
+.js-reveal.is-visible .stagger-child:nth-child(4) { transition-delay: 180ms; }
+.js-reveal.is-visible .stagger-child:nth-child(5) { transition-delay: 240ms; }
+.js-reveal.is-visible .stagger-child:nth-child(6) { transition-delay: 300ms; }
+
+.stagger-child {
+  opacity: 0;
+  transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.js-reveal.is-visible .stagger-child {
+  opacity: 1;
+}
+
+/* ===== SKIP LINK ===== */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-primary);
+  color: #fff;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  z-index: 200;
+  text-decoration: none;
+}
+
+.skip-link:focus {
+  top: var(--space-4);
+}
+
+/* ===== DIVIDER ACCENT ===== */
+.teal-line {
+  width: 48px;
+  height: 3px;
+  background: var(--color-primary);
+  border-radius: var(--radius-full);
+  margin-bottom: var(--space-6);
+}
+
+.section__header--center .teal-line {
+  margin-inline: auto;
+}
+</style>
+</head>
+<body>
+<!-- Skip Link -->
+<a href="#main" class="skip-link">Skip to content</a>
+
+<!-- Header -->
+<header class="header" id="header">
+  <div class="container header__inner">
+    <a href="#" class="header__logo" aria-label="FieldIQ Home">
+      <!-- FieldIQ Logo: geometric mark + wordmark -->
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="1" y="1" width="30" height="30" rx="7" stroke="currentColor" stroke-width="2"/>
+        <rect x="7" y="7" width="8" height="18" rx="1.5" fill="currentColor"/>
+        <rect x="19" y="7" width="8" height="12" rx="1.5" fill="currentColor"/>
+        <circle cx="23" cy="24" r="3" fill="none" stroke="currentColor" stroke-width="2"/>
+      </svg>
+      <span class="header__logo-text">FieldIQ</span>
+    </a>
+
+    <nav>
+      <ul class="header__nav" role="list">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#industries">Industries</a></li>
+        <li><a href="#how-it-works">How It Works</a></li>
+        <li><a href="#early-access">Early Access</a></li>
+      </ul>
+    </nav>
+
+    <div class="header__actions">
+      <button class="theme-toggle" data-theme-toggle aria-label="Switch to dark mode">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <a href="#early-access" class="btn btn--primary btn--sm header__cta">Request Early Access</a>
+      <button class="mobile-menu-btn" aria-label="Open menu" aria-expanded="false" id="mobile-menu-btn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- Mobile Nav -->
+<div class="mobile-nav" id="mobile-nav">
+  <a href="#features" onclick="closeMobileNav()">Features</a>
+  <a href="#industries" onclick="closeMobileNav()">Industries</a>
+  <a href="#how-it-works" onclick="closeMobileNav()">How It Works</a>
+  <a href="#early-access" onclick="closeMobileNav()">Early Access</a>
+</div>
+
+<!-- Main Content -->
+<main id="main">
+
+  <!-- HERO -->
+  <section class="hero" id="hero">
+    <div class="hero__bg">
+      <img src="./assets/hero-bg.png" alt="" width="1920" height="1080" loading="eager" decoding="async">
+    </div>
+    <div class="hero__content">
+      <div class="container">
+        <div class="hero__text">
+          <div class="hero__badge">Early Access — Now Open</div>
+          <h1>Smarter Field Service Starts&nbsp;Here</h1>
+          <p class="hero__sub">FieldIQ gives your team one platform to manage jobsites, dispatch crews, capture data, and track every service visit — built for any trade.</p>
+          <form class="hero__form" onsubmit="handleFormSubmit(event)">
+            <label for="hero-email" class="sr-only">Email address</label>
+            <input type="email" id="hero-email" placeholder="you@company.com" required>
+            <button type="submit" class="btn btn--primary">Request Early Access</button>
+          </form>
+          <p class="hero__trust">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            Trusted by pool, HVAC, pest control, and 50+ other service trades
+          </p>
+        </div>
+        <div class="hero__visual">
+          <div class="hero__visual-card">
+            <div class="hero__stats">
+              <div class="hero__stat">
+                <div class="hero__stat-value">50+</div>
+                <div class="hero__stat-label">Trade templates</div>
+              </div>
+              <div class="hero__stat">
+                <div class="hero__stat-value">100%</div>
+                <div class="hero__stat-label">Customizable</div>
+              </div>
+              <div class="hero__stat">
+                <div class="hero__stat-value">Real-time</div>
+                <div class="hero__stat-label">Field visibility</div>
+              </div>
+              <div class="hero__stat">
+                <div class="hero__stat-value">Self-hosted</div>
+                <div class="hero__stat-label">Your data, yours</div>
+              </div>
+            </div>
+            <div class="hero__trades">
+              <span class="hero__trade-tag">Pool Service</span>
+              <span class="hero__trade-tag">HVAC</span>
+              <span class="hero__trade-tag">Pest Control</span>
+              <span class="hero__trade-tag">Hood Cleaning</span>
+              <span class="hero__trade-tag">+46 more</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROBLEMS -->
+  <section class="section" id="problems">
+    <div class="container">
+      <div class="section__header js-reveal">
+        <div class="teal-line"></div>
+        <p class="section__label">The Problem</p>
+        <h2 class="section__title">Your business runs in the field. Your tools shouldn't hold you&nbsp;back.</h2>
+      </div>
+      <div class="problems-grid js-reveal">
+        <div class="problem-card stagger-child">
+          <div class="problem-card__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+          </div>
+          <h3>Scattered Data</h3>
+          <p>Clipboards, texts, and spreadsheets don't scale. Critical job details get lost between the truck and the office.</p>
+        </div>
+        <div class="problem-card stagger-child">
+          <div class="problem-card__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          </div>
+          <h3>Cookie-Cutter Software</h3>
+          <p>Most FSM tools force you into their workflow. You need yours — built around how your crew actually operates.</p>
+        </div>
+        <div class="problem-card stagger-child">
+          <div class="problem-card__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </div>
+          <h3>No Visibility</h3>
+          <p>If you can't see what's happening in real time, you're guessing. Guessing costs money, time, and trust.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="section section--alt" id="features">
+    <div class="container">
+      <div class="section__header section__header--center js-reveal">
+        <div class="teal-line"></div>
+        <p class="section__label">Platform</p>
+        <h2 class="section__title">Everything your crew needs. Nothing they don't.</h2>
+        <p class="section__subtitle">A complete field service platform that adapts to your trade — not the other way around.</p>
+      </div>
+      <div class="features-layout">
+        <div class="features-visual js-reveal">
+          <img src="./assets/features-visual.png" alt="FieldIQ platform dashboard showing workflow automation and data management" width="800" height="600" loading="lazy" decoding="async">
+        </div>
+        <div class="features-grid js-reveal">
+          <div class="feature-card stagger-child">
+            <div class="feature-card__icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18M8 8l-5-5M16 16l5 5"/></svg>
+            </div>
+            <h3>Custom Field Engine</h3>
+            <p>Define the data you collect. Pool chemistry, hood measurements, equipment serial numbers — your fields, your labels, your workflow.</p>
+          </div>
+          <div class="feature-card stagger-child">
+            <div class="feature-card__icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            </div>
+            <h3>Jobsite Management</h3>
+            <p>Track every property, site history, equipment, and contact — all in one place with full location context.</p>
+          </div>
+          <div class="feature-card stagger-child">
+            <div class="feature-card__icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+            <h3>Smart Scheduling &amp; Routes</h3>
+            <p>Dispatch crews, optimize routes, and keep everyone on the same page — from the office or the field.</p>
+          </div>
+          <div class="feature-card stagger-child">
+            <div class="feature-card__icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            </div>
+            <h3>Service Orders &amp; Visits</h3>
+            <p>Create, assign, and track work orders from request to completion with full audit trails and timestamped records.</p>
+          </div>
+          <div class="feature-card stagger-child">
+            <div class="feature-card__icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            </div>
+            <h3>Photos, Signatures &amp; Docs</h3>
+            <p>Capture before/after photos, collect signatures, and attach documents — all geotagged and timestamped.</p>
+          </div>
+          <div class="feature-card stagger-child">
+            <div class="feature-card__icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+            </div>
+            <h3>Parts &amp; Inventory</h3>
+            <p>Track what's on the truck. Log usage per visit. Know when to restock before your crew runs out.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- INDUSTRIES -->
+  <section class="section" id="industries">
+    <div class="container">
+      <div class="section__header js-reveal">
+        <div class="teal-line"></div>
+        <p class="section__label">Industries</p>
+        <h2 class="section__title">Pre-built for your trade. Customizable for your&nbsp;business.</h2>
+      </div>
+      <div class="js-reveal">
+        <div class="industries-tags">
+          <span class="industry-tag stagger-child">Pool Service</span>
+          <span class="industry-tag stagger-child">HVAC</span>
+          <span class="industry-tag stagger-child">Pest Control</span>
+          <span class="industry-tag stagger-child">Hood Cleaning</span>
+          <span class="industry-tag stagger-child">Cabinet Install</span>
+          <span class="industry-tag stagger-child">Duct Cleaning</span>
+          <span class="industry-tag stagger-child">General Contractor</span>
+          <span class="industry-tag industry-tag--special stagger-child">+ Build Your Own</span>
+        </div>
+        <p class="industries-sub">Start with an industry template. Add, rename, or remove any field. FieldIQ adapts to how <strong>you</strong> work.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="section section--alt" id="how-it-works">
+    <div class="container">
+      <div class="section__header section__header--center js-reveal">
+        <div class="teal-line"></div>
+        <p class="section__label">Getting Started</p>
+        <h2 class="section__title">Up and running in minutes, not months.</h2>
+      </div>
+      <div class="steps js-reveal">
+        <div class="step stagger-child">
+          <div class="step__number"></div>
+          <h3>Pick your industry template</h3>
+          <p>Choose from 50+ trade-specific templates with pre-configured fields, forms, and workflows.</p>
+        </div>
+        <div class="step stagger-child">
+          <div class="step__number"></div>
+          <h3>Customize fields &amp; workflows</h3>
+          <p>Add, rename, or remove any field. Configure service order flows that match how your team actually works.</p>
+        </div>
+        <div class="step stagger-child">
+          <div class="step__number"></div>
+          <h3>Deploy to your team's phones</h3>
+          <p>Your crew downloads the app and starts logging visits. Real-time data flows to your office dashboard.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TRUST / SOCIAL PROOF -->
+  <section class="section" id="trust">
+    <div class="container">
+      <div class="section__header section__header--center js-reveal">
+        <div class="teal-line"></div>
+        <p class="section__label">Why FieldIQ</p>
+        <h2 class="section__title">Built by operators. For&nbsp;operators.</h2>
+      </div>
+      <div class="trust-grid js-reveal">
+        <div class="trust-card stagger-child">
+          <div class="trust-card__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <p>Built by field service operators, not Silicon Valley.</p>
+          <span>We've run crews. We know the frustrations firsthand.</span>
+        </div>
+        <div class="trust-card stagger-child">
+          <div class="trust-card__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <p>From the team behind AquaPalm — managing 500+ pools across Arizona.</p>
+          <span>Real operations experience, baked into every feature.</span>
+        </div>
+        <div class="trust-card stagger-child">
+          <div class="trust-card__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </div>
+          <p>Self-hosted data. Your information stays yours.</p>
+          <span>No vendor lock-in. No data mining. Full control.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FINAL CTA -->
+  <section class="section cta-section" id="early-access">
+    <div class="cta-section__bg">
+      <img src="./assets/cta-visual.png" alt="" width="1920" height="1080" loading="lazy" decoding="async">
+    </div>
+    <div class="container cta-section__content">
+      <h2>Ready to modernize your field operations?</h2>
+      <p class="cta-section__sub">Join the waitlist. Be first to try FieldIQ.</p>
+      <form class="cta-form" onsubmit="handleFormSubmit(event)">
+        <label for="cta-email" class="sr-only">Email address</label>
+        <input type="email" id="cta-email" placeholder="you@company.com" required>
+        <button type="submit" class="btn btn--primary">Request Early Access</button>
+      </form>
+      <p class="cta-note">No credit card required. We'll notify you when access opens.</p>
+    </div>
+  </section>
+
+</main>
+
+<!-- Footer -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer__inner">
+      <div class="footer__brand">
+        <a href="#" class="footer__logo" aria-label="FieldIQ Home">
+          <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect x="1" y="1" width="30" height="30" rx="7" stroke="currentColor" stroke-width="2"/>
+            <rect x="7" y="7" width="8" height="18" rx="1.5" fill="currentColor"/>
+            <rect x="19" y="7" width="8" height="12" rx="1.5" fill="currentColor"/>
+            <circle cx="23" cy="24" r="3" fill="none" stroke="currentColor" stroke-width="2"/>
+          </svg>
+          <span class="footer__logo-text">FieldIQ</span>
+        </a>
+        <p class="footer__desc">One platform for every trade. Manage jobsites, dispatch crews, and capture field data — your way.</p>
+      </div>
+      <div class="footer__links">
+        <div class="footer__links-col">
+          <h4>Product</h4>
+          <ul role="list">
+            <li><a href="#features">Features</a></li>
+            <li><a href="#industries">Industries</a></li>
+            <li><a href="#how-it-works">How It Works</a></li>
+          </ul>
+        </div>
+        <div class="footer__links-col">
+          <h4>Company</h4>
+          <ul role="list">
+            <li><a href="#early-access">Early Access</a></li>
+            <li><a href="mailto:hello@fldiq.com">Contact</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="footer__bottom">
+      <p class="footer__copyright">&copy; 2026 FieldIQ. All rights reserved.</p>
+      <p class="footer__attribution">
+        <a href="https://www.perplexity.ai/computer" target="_blank" rel="noopener noreferrer">Created with Perplexity Computer</a>
+      </p>
+    </div>
+  </div>
+</footer>
+
+<script>
+// ===== THEME TOGGLE =====
+(function(){
+  const toggle = document.querySelector('[data-theme-toggle]');
+  const root = document.documentElement;
+  let theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  root.setAttribute('data-theme', theme);
+  updateToggleIcon();
+
+  toggle && toggle.addEventListener('click', () => {
+    theme = theme === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', theme);
+    toggle.setAttribute('aria-label', 'Switch to ' + (theme === 'dark' ? 'light' : 'dark') + ' mode');
+    updateToggleIcon();
+  });
+
+  function updateToggleIcon() {
+    if (!toggle) return;
+    toggle.innerHTML = theme === 'dark'
+      ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'
+      : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+  }
+})();
+
+// ===== HEADER SCROLL =====
+(function(){
+  const header = document.getElementById('header');
+  let lastScroll = 0;
+  
+  function onScroll() {
+    const y = window.scrollY;
+    if (y > 50) {
+      header.classList.add('header--scrolled');
+    } else {
+      header.classList.remove('header--scrolled');
+    }
+    lastScroll = y;
+  }
+  
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+})();
+
+// ===== MOBILE MENU =====
+const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+const mobileNav = document.getElementById('mobile-nav');
+
+mobileMenuBtn && mobileMenuBtn.addEventListener('click', () => {
+  const isOpen = mobileNav.classList.toggle('is-open');
+  mobileMenuBtn.setAttribute('aria-expanded', isOpen);
+  mobileMenuBtn.innerHTML = isOpen
+    ? '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>'
+    : '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>';
+});
+
+function closeMobileNav() {
+  mobileNav.classList.remove('is-open');
+  mobileMenuBtn.setAttribute('aria-expanded', 'false');
+  mobileMenuBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>';
+}
+
+// ===== SCROLL REVEAL (JS Fallback) =====
+(function(){
+  // Check if CSS scroll-driven animations are supported
+  const supportsScrollTimeline = CSS.supports && CSS.supports('animation-timeline: scroll()');
+  
+  if (!supportsScrollTimeline) {
+    const reveals = document.querySelectorAll('.js-reveal');
+    
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { 
+      threshold: 0.1,
+      rootMargin: '0px 0px -40px 0px'
+    });
+    
+    reveals.forEach(el => observer.observe(el));
+  } else {
+    // If CSS animations supported, make JS-reveal elements visible immediately
+    // (CSS .fade-in class handles the animation)
+    document.querySelectorAll('.js-reveal').forEach(el => {
+      el.classList.add('is-visible');
+    });
+  }
+})();
+
+// ===== FORM HANDLER (UI only) =====
+function handleFormSubmit(e) {
+  e.preventDefault();
+  const input = e.target.querySelector('input[type="email"]');
+  const btn = e.target.querySelector('button[type="submit"]');
+  const originalText = btn.textContent;
+  
+  btn.textContent = 'Added to Waitlist ✓';
+  btn.style.background = '#059669';
+  input.value = '';
+  input.disabled = true;
+  btn.disabled = true;
+  
+  setTimeout(() => {
+    btn.textContent = originalText;
+    btn.style.background = '';
+    input.disabled = false;
+    btn.disabled = false;
+  }, 3000);
+}
+
+// ===== SMOOTH SCROLL FOR ANCHOR LINKS =====
+document.querySelectorAll('a[href^="#"]').forEach(link => {
+  link.addEventListener('click', (e) => {
+    const target = document.querySelector(link.getAttribute('href'));
+    if (target) {
+      e.preventDefault();
+      target.scrollIntoView({ behavior: 'smooth' });
+    }
+  });
+});
+</script>
+</body>
+</html>
