@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Droplets } from 'lucide-react'
+import { Layers } from 'lucide-react'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -41,14 +41,14 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-sand-50 px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-aqua-600">
-            <Droplets className="h-8 w-8 text-white" />
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-indigo-600">
+            <Layers className="h-8 w-8 text-white" />
           </div>
           <h1 className="font-display text-2xl font-bold text-sand-900">
-            Aqua Palm
+            FieldBase
           </h1>
           <p className="mt-1 text-sm text-sand-500">
-            Office Dashboard
+            Field Service Management
           </p>
         </div>
 
@@ -58,7 +58,7 @@ export default function LoginPage() {
               id="email"
               label="Email"
               type="email"
-              placeholder="admin@aquapalmpools.com"
+              placeholder="you@company.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -86,7 +86,7 @@ export default function LoginPage() {
         </div>
 
         <p className="mt-4 text-center text-xs text-sand-400">
-          Access restricted to admin and office staff
+          Sign in with your organization account
         </p>
       </div>
     </div>

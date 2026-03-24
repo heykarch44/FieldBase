@@ -27,8 +27,8 @@ export default function AccessDeniedPage() {
           Access Denied
         </h1>
         <p className="mt-2 max-w-sm text-sm text-sand-500">
-          Your account does not have permission to access the office dashboard.
-          Only admin and office staff can access this area.
+          Your account is not a member of any organization.
+          Ask your team admin to invite you, or create a new organization.
         </p>
         <Button onClick={handleSignOut} variant="secondary" className="mt-6">
           Sign out and try a different account

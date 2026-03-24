@@ -166,8 +166,8 @@ export default function TechniciansPage() {
         {technicians.map((tech) => (
           <Card key={tech.user.id} className="p-5">
             <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-aqua-50">
-                <HardHat className="h-6 w-6 text-aqua-600" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-teal-50">
+                <HardHat className="h-6 w-6 text-teal-600" />
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-base font-semibold text-sand-900">{tech.user.full_name}</h3>
@@ -210,16 +210,16 @@ export default function TechniciansPage() {
             </div>
 
             {tech.todayRoute && (
-              <div className="mt-3 flex items-center gap-2 rounded-lg bg-aqua-50 p-2 text-xs">
-                <MapPin className="h-3.5 w-3.5 text-aqua-600" />
-                <span className="font-medium text-aqua-700">
+              <div className="mt-3 flex items-center gap-2 rounded-lg bg-teal-50 p-2 text-xs">
+                <MapPin className="h-3.5 w-3.5 text-teal-600" />
+                <span className="font-medium text-teal-700">
                   {"Today's route:"} {tech.todayRoute.name}
                 </span>
               </div>
             )}
 
             <button
-              className="mt-3 w-full text-center text-xs font-medium text-aqua-600 hover:text-aqua-700"
+              className="mt-3 w-full text-center text-xs font-medium text-teal-600 hover:text-teal-700"
               onClick={() =>
                 setExpandedTech(expandedTech === tech.user.id ? null : tech.user.id)
               }

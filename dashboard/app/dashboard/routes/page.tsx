@@ -81,7 +81,7 @@ function SortableStop({
         className="flex flex-1 cursor-pointer items-center gap-3 min-w-0"
         onClick={onClick}
       >
-        <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-aqua-100 text-xs font-medium text-aqua-700">
+        <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-teal-100 text-xs font-medium text-teal-700">
           {index + 1}
         </span>
         {stop.jobsite ? (
@@ -161,7 +161,7 @@ function RouteCard({ route, jobsites }: { route: RouteWithTech; jobsites: Jobsit
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-aqua-50 text-aqua-600">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-50 text-teal-600">
             <MapPin className="h-5 w-5" />
           </div>
           <div>
@@ -280,7 +280,7 @@ export default function RoutesPage() {
               onClick={() => setActiveDay(day)}
               className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
                 activeDay === day
-                  ? 'bg-white text-aqua-700 shadow-sm'
+                  ? 'bg-white text-teal-700 shadow-sm'
                   : 'text-sand-500 hover:text-sand-700'
               }`}
             >

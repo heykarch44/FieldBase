@@ -16,7 +16,7 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
+          cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           )
           supabaseResponse = NextResponse.next({ request })
@@ -48,18 +48,60 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // If logged in and accessing dashboard, check role
+  // If logged in and accessing dashboard, verify they belong to an org
   if (user && pathname.startsWith('/dashboard')) {
     const { data: profile } = await supabase
       .from('users')
-      .select('role')
+      .select('active_org_id')
       .eq('id', user.id)
       .single()
 
-    if (profile && profile.role !== 'admin' && profile.role !== 'office') {
-      const url = request.nextUrl.clone()
-      url.pathname = '/access-denied'
-      return NextResponse.redirect(url)
+    // If user has no active org, check if they belong to any org
+    if (!profile?.active_org_id) {
+      const { data: membership } = await supabase
+        .from('org_members')
+        .select('org_id')
+        .eq('user_id', user.id)
+        .limit(1)
+        .single()
+
+      if (!membership) {
+        // No org membership at all — send to access denied
+        const url = request.nextUrl.clone()
+        url.pathname = '/access-denied'
+        return NextResponse.redirect(url)
+      }
+
+      // Auto-set active_org_id to first org they belong to
+      await supabase
+        .from('users')
+        .update({ active_org_id: membership.org_id })
+        .eq('id', user.id)
+    }
+
+    // Check their role in the active org — viewer and above can access dashboard
+    const activeOrgId = profile?.active_org_id
+    if (activeOrgId) {
+      const { data: member } = await supabase
+        .from('org_members')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('org_id', activeOrgId)
+        .single()
+
+      if (!member) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/access-denied'
+        return NextResponse.redirect(url)
+      }
+
+      // Technicians can only access limited pages (not settings/admin)
+      const adminOnlyPaths = ['/dashboard/settings/fields', '/dashboard/settings/team', '/dashboard/settings/org']
+      if (member.role === 'technician' && adminOnlyPaths.some(p => pathname.startsWith(p))) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/dashboard'
+        return NextResponse.redirect(url)
+      }
     }
   }
 

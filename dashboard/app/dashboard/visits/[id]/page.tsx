@@ -91,9 +91,9 @@ interface Signature {
   signed_at: string
 }
 
-const statusBadgeVariant: Record<VisitStatus, 'green' | 'aqua' | 'gray' | 'red'> = {
+const statusBadgeVariant: Record<VisitStatus, 'green' | 'teal' | 'gray' | 'red'> = {
   completed: 'green',
-  in_progress: 'aqua',
+  in_progress: 'teal',
   scheduled: 'gray',
   skipped: 'red',
 }
@@ -312,14 +312,14 @@ export default function VisitDetailPage() {
               </div>
             </div>
             {visit.arrived_at && visit.departed_at && (
-              <p className="mt-3 text-sm font-medium text-aqua-600">
+              <p className="mt-3 text-sm font-medium text-teal-600">
                 Duration: {formatDuration(visit.arrived_at, visit.departed_at)}
               </p>
             )}
 
             {/* Technician info */}
             <div className="mt-4 flex items-center gap-3 border-t border-sand-100 pt-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-aqua-50 text-aqua-600">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-50 text-teal-600">
                 <span className="text-sm font-semibold">
                   {(visit.technician?.full_name ?? 'U').charAt(0)}
                 </span>
@@ -354,7 +354,7 @@ export default function VisitDetailPage() {
           <Card>
             <CardTitle>
               <div className="flex items-center gap-2">
-                <Layers className="h-4 w-4 text-aqua-500" />
+                <Layers className="h-4 w-4 text-teal-500" />
                 Field Data
               </div>
             </CardTitle>

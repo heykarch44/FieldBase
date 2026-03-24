@@ -82,7 +82,7 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <p className="text-sand-500">Role</p>
-                  <Badge variant="aqua">{user.role}</Badge>
+                  <Badge variant="teal">{user.role}</Badge>
                 </div>
                 {user.phone && (
                   <div>

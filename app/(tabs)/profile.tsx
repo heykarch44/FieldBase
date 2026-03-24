@@ -194,14 +194,14 @@ const styles = StyleSheet.create({
   avatarCircle: {
     width: 80,
     height: 80,
-    backgroundColor: "#cffafe", // aqua-100
+    backgroundColor: "#cffafe", // teal-100
     borderRadius: 40,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 12,
   },
   avatarText: {
-    color: "#0891b2", // aqua-600
+    color: "#0891b2", // teal-600
     fontSize: 24,
     fontWeight: "bold",
   },
@@ -220,14 +220,14 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   roleBadge: {
-    backgroundColor: "#ecfeff", // aqua-50
+    backgroundColor: "#ecfeff", // teal-50
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 4,
     marginTop: 8,
   },
   roleText: {
-    color: "#0e7490", // aqua-700
+    color: "#0e7490", // teal-700
     fontSize: 12,
     fontWeight: "600",
     textTransform: "capitalize",
