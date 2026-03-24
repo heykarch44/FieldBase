@@ -1,13 +1,13 @@
 {
   "expo": {
-    "name": "Aqua Palm",
-    "slug": "aqua-palm-app",
+    "name": "FieldBase",
+    "slug": "fieldbase",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "scheme": "aqua-palm",
+    "scheme": "fieldbase",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -15,9 +15,9 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.aquapalm.fieldapp",
+      "bundleIdentifier": "com.fieldbase.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "Take photos of pool equipment and service work",
+        "NSCameraUsageDescription": "Take photos of equipment and service work",
         "NSLocationWhenInUseUsageDescription": "Record GPS location for arrive/depart timestamps",
         "NSFaceIDUsageDescription": "Use Face ID for quick login"
       }
@@ -27,7 +27,7 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundColor": "#0891B2"
       },
-      "package": "com.aquapalm.fieldapp",
+      "package": "com.fieldbase.app",
       "permissions": [
         "CAMERA",
         "ACCESS_FINE_LOCATION",
@@ -42,7 +42,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Take photos of pool equipment and service work"
+          "cameraPermission": "Take photos of equipment and service work"
         }
       ],
       [
@@ -74,7 +74,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "aqua-palm-field-app"
+        "projectId": "fieldbase-app"
       },
       "router": {
         "origin": false

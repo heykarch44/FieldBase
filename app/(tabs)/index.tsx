@@ -104,7 +104,7 @@ export default function RouteScreen() {
                   <Ionicons
                     name="information-circle"
                     size={16}
-                    color={Colors.aqua[600]}
+                    color={Colors.primary[600]}
                   />
                   <Text style={[styles.expandedText, styles.expandedTextFlex]}>
                     {item.jobsite.access_notes}
@@ -157,7 +157,7 @@ export default function RouteScreen() {
                     <Ionicons
                       name="navigate"
                       size={20}
-                      color={Colors.aqua[600]}
+                      color={Colors.primary[600]}
                     />
                   </TouchableOpacity>
                 )}
@@ -213,7 +213,7 @@ export default function RouteScreen() {
               <Ionicons
                 name={viewMode === "list" ? "map-outline" : "list-outline"}
                 size={20}
-                color={Colors.aqua[600]}
+                color={Colors.primary[600]}
               />
             </TouchableOpacity>
             {stops.length > 0 && (
@@ -244,7 +244,7 @@ export default function RouteScreen() {
             <RefreshControl
               refreshing={loading}
               onRefresh={onRefresh}
-              tintColor={Colors.aqua[600]}
+              tintColor={Colors.primary[600]}
             />
           }
         />
@@ -276,7 +276,7 @@ export default function RouteScreen() {
             {polylineCoords.length > 1 && (
               <Polyline
                 coordinates={polylineCoords}
-                strokeColor={Colors.aqua[600]}
+                strokeColor={Colors.primary[600]}
                 strokeWidth={3}
               />
             )}

@@ -1,11 +1,32 @@
 import { useState, useCallback, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../providers/AuthProvider";
-import type { VisitDetail, Customer, ServiceVisit, ChemicalLog, VisitPhoto, RepairRequest } from "../types/database";
+
+interface VisitHistoryItem {
+  id: string;
+  scheduled_date: string;
+  status: string;
+  arrived_at: string | null;
+  departed_at: string | null;
+  notes: string | null;
+  jobsite: {
+    id: string;
+    name: string;
+    address_line1: string;
+    city: string;
+  };
+  photos: Array<{ id: string }>;
+  service_orders: Array<{
+    id: string;
+    title: string;
+    urgency: string;
+    description: string | null;
+  }>;
+}
 
 export function useVisitHistory() {
   const { user } = useAuth();
-  const [visits, setVisits] = useState<VisitDetail[]>([]);
+  const [visits, setVisits] = useState<VisitHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,8 +41,11 @@ export function useVisitHistory() {
       const fromDate = sevenDaysAgo.toISOString().split("T")[0];
 
       const { data: visitsData, error: visitError } = await supabase
-        .from("service_visits")
-        .select("*")
+        .from("visits")
+        .select(`
+          id, scheduled_date, status, arrived_at, departed_at, notes,
+          jobsite:jobsites(id, name, address_line1, city)
+        `)
         .eq("technician_id", user.id)
         .eq("status", "completed")
         .gte("scheduled_date", fromDate)
@@ -34,54 +58,33 @@ export function useVisitHistory() {
         return;
       }
 
-      const visitList = visitsData as ServiceVisit[];
-      const visitIds = visitList.map((v) => v.id);
-      const customerIds = [...new Set(visitList.map((v) => v.customer_id))];
+      const visitIds = visitsData.map((v) => v.id);
 
-      const [customersRes, chemicalsRes, photosRes, repairsRes] = await Promise.all([
-        supabase.from("customers").select("*").in("id", customerIds),
-        supabase.from("chemical_logs").select("*").in("visit_id", visitIds),
-        supabase.from("visit_photos").select("*").in("visit_id", visitIds),
-        supabase.from("repair_requests").select("*").in("visit_id", visitIds),
+      const [photosRes, ordersRes] = await Promise.all([
+        supabase.from("photos").select("id, entity_id").eq("entity_type", "visit").in("entity_id", visitIds),
+        supabase.from("service_orders").select("id, visit_id, title, urgency, description").in("visit_id", visitIds),
       ]);
 
-      const customerMap = new Map(
-        ((customersRes.data ?? []) as Customer[]).map((c) => [c.id, c])
-      );
-      const chemicalsByVisit = new Map<string, ChemicalLog[]>();
-      for (const cl of (chemicalsRes.data ?? []) as ChemicalLog[]) {
-        const list = chemicalsByVisit.get(cl.visit_id) ?? [];
-        list.push(cl);
-        chemicalsByVisit.set(cl.visit_id, list);
-      }
-      const photosByVisit = new Map<string, VisitPhoto[]>();
-      for (const p of (photosRes.data ?? []) as VisitPhoto[]) {
-        const list = photosByVisit.get(p.visit_id) ?? [];
-        list.push(p);
-        photosByVisit.set(p.visit_id, list);
-      }
-      const repairsByVisit = new Map<string, RepairRequest[]>();
-      for (const r of (repairsRes.data ?? []) as RepairRequest[]) {
-        if (r.visit_id) {
-          const list = repairsByVisit.get(r.visit_id) ?? [];
-          list.push(r);
-          repairsByVisit.set(r.visit_id, list);
-        }
+      const photosByVisit = new Map<string, Array<{ id: string }>>();
+      for (const p of photosRes.data ?? []) {
+        const list = photosByVisit.get(p.entity_id) ?? [];
+        list.push({ id: p.id });
+        photosByVisit.set(p.entity_id, list);
       }
 
-      const detailed: VisitDetail[] = visitList
-        .map((visit) => {
-          const customer = customerMap.get(visit.customer_id);
-          if (!customer) return null;
-          return {
-            ...visit,
-            customer,
-            chemical_logs: chemicalsByVisit.get(visit.id) ?? [],
-            photos: photosByVisit.get(visit.id) ?? [],
-            repair_requests: repairsByVisit.get(visit.id) ?? [],
-          };
-        })
-        .filter((v): v is VisitDetail => v !== null);
+      const ordersByVisit = new Map<string, Array<{ id: string; title: string; urgency: string; description: string | null }>>();
+      for (const o of (ordersRes.data ?? []) as Array<{ id: string; visit_id: string; title: string; urgency: string; description: string | null }>) {
+        const list = ordersByVisit.get(o.visit_id) ?? [];
+        list.push({ id: o.id, title: o.title, urgency: o.urgency, description: o.description });
+        ordersByVisit.set(o.visit_id, list);
+      }
+
+      const detailed: VisitHistoryItem[] = visitsData.map((visit) => ({
+        ...visit,
+        jobsite: visit.jobsite as unknown as VisitHistoryItem["jobsite"],
+        photos: photosByVisit.get(visit.id) ?? [],
+        service_orders: ordersByVisit.get(visit.id) ?? [],
+      }));
 
       setVisits(detailed);
     } catch (err) {

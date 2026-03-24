@@ -8,17 +8,32 @@ import { Card, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatDate } from '@/lib/utils'
-import type { User, ServiceVisit, Route } from '@/lib/types'
+import type { Route } from '@/lib/types'
 import { HardHat, MapPin, Phone, Mail, Clock, CheckCircle } from 'lucide-react'
 
+interface TechUser {
+  id: string
+  full_name: string
+  email: string
+  phone: string | null
+}
+
+interface RecentVisit {
+  id: string
+  scheduled_date: string
+  arrived_at: string | null
+  departed_at: string | null
+  jobsite: { name: string }
+}
+
 interface TechData {
-  user: User
+  user: TechUser
   todayRoute: Route | null
   todayVisits: { completed: number; total: number }
   weekVisits: number
   monthVisits: number
   avgMinutes: number
-  recentVisits: (ServiceVisit & { customer: { first_name: string; last_name: string } })[]
+  recentVisits: RecentVisit[]
 }
 
 export default function TechniciansPage() {
@@ -30,13 +45,13 @@ export default function TechniciansPage() {
     async function fetchData() {
       const supabase = createClient()
 
-      const { data: users } = await supabase
-        .from('users')
-        .select('*')
+      // Get technicians from org_members joined with users
+      const { data: members } = await supabase
+        .from('org_members')
+        .select('user_id, users(id, full_name, email, phone)')
         .eq('role', 'technician')
-        .order('full_name')
 
-      if (!users) {
+      if (!members || members.length === 0) {
         setLoading(false)
         return
       }
@@ -55,7 +70,10 @@ export default function TechniciansPage() {
 
       const techDataList: TechData[] = []
 
-      for (const user of users as User[]) {
+      for (const member of members as Array<{ user_id: string; users: TechUser | null }>) {
+        const user = member.users
+        if (!user) continue
+
         const [routeRes, todayVisitsRes, weekRes, monthRes, recentRes] = await Promise.all([
           supabase
             .from('routes')
@@ -65,25 +83,25 @@ export default function TechniciansPage() {
             .limit(1)
             .maybeSingle(),
           supabase
-            .from('service_visits')
+            .from('visits')
             .select('id, status')
             .eq('technician_id', user.id)
             .eq('scheduled_date', todayStr),
           supabase
-            .from('service_visits')
+            .from('visits')
             .select('id', { count: 'exact', head: true })
             .eq('technician_id', user.id)
             .eq('status', 'completed')
             .gte('scheduled_date', weekAgo.toISOString().split('T')[0]),
           supabase
-            .from('service_visits')
+            .from('visits')
             .select('id', { count: 'exact', head: true })
             .eq('technician_id', user.id)
             .eq('status', 'completed')
             .gte('scheduled_date', monthAgo.toISOString().split('T')[0]),
           supabase
-            .from('service_visits')
-            .select('*, customer:customers(first_name, last_name)')
+            .from('visits')
+            .select('id, scheduled_date, arrived_at, departed_at, jobsite:jobsites(name)')
             .eq('technician_id', user.id)
             .eq('status', 'completed')
             .order('scheduled_date', { ascending: false })
@@ -96,7 +114,7 @@ export default function TechniciansPage() {
         // Calculate average minutes
         let totalMinutes = 0
         let countWithTime = 0
-        for (const v of completedVisits as unknown as ServiceVisit[]) {
+        for (const v of completedVisits as unknown as RecentVisit[]) {
           if (v.arrived_at && v.departed_at) {
             totalMinutes += (new Date(v.departed_at).getTime() - new Date(v.arrived_at).getTime()) / 60000
             countWithTime++
@@ -113,7 +131,7 @@ export default function TechniciansPage() {
           weekVisits: weekRes.count ?? 0,
           monthVisits: monthRes.count ?? 0,
           avgMinutes: countWithTime > 0 ? Math.round(totalMinutes / countWithTime) : 0,
-          recentVisits: (completedVisits ?? []) as unknown as TechData['recentVisits'],
+          recentVisits: (completedVisits ?? []) as unknown as RecentVisit[],
         })
       }
 
@@ -222,7 +240,7 @@ export default function TechniciansPage() {
                       <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sand-800">
-                          {visit.customer.first_name} {visit.customer.last_name}
+                          {visit.jobsite?.name ?? 'Unknown jobsite'}
                         </p>
                         <p className="text-sand-400">{formatDate(visit.scheduled_date)}</p>
                       </div>

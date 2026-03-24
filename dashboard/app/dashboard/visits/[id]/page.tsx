@@ -10,33 +10,85 @@ import { Card, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { formatDateTime, capitalizeFirst, cn } from '@/lib/utils'
-import type {
-  ServiceVisit,
-  Customer,
-  User,
-  ChemicalLog,
-  VisitPhoto,
-  RepairRequest,
-  VisitStatus,
-} from '@/lib/types'
+import type { VisitStatus } from '@/lib/types'
 import {
   ArrowLeft,
   Clock,
   FileText,
-  FlaskConical,
   Camera,
   Wrench,
   MapPin,
   AlertTriangle,
-  CheckCircle2,
-  Circle,
-  ClipboardList,
+  Layers,
   Phone,
+  PenTool,
 } from 'lucide-react'
 
-type VisitWithRelations = ServiceVisit & {
-  customer: Customer
-  technician: Pick<User, 'full_name' | 'email' | 'phone'>
+interface Jobsite {
+  id: string
+  name: string
+  address_line1: string
+  city: string | null
+  state: string | null
+  zip: string | null
+  contact_name: string | null
+  contact_phone: string | null
+}
+
+interface Technician {
+  full_name: string
+  email: string | null
+  phone: string | null
+}
+
+interface Visit {
+  id: string
+  status: VisitStatus
+  scheduled_date: string
+  arrived_at: string | null
+  departed_at: string | null
+  arrived_lat: number | null
+  arrived_lng: number | null
+  departed_lat: number | null
+  departed_lng: number | null
+  geofence_verified: boolean | null
+  notes: string | null
+  jobsite: Jobsite
+  technician: Technician
+}
+
+interface FieldValue {
+  id: string
+  value: string | null
+  field_definition: {
+    id: string
+    label: string
+    field_type: string
+    sort_order: number
+  }
+}
+
+interface Photo {
+  id: string
+  storage_url: string
+  caption: string | null
+  photo_type: string
+}
+
+interface ServiceOrder {
+  id: string
+  title: string
+  description: string | null
+  urgency: string
+  status: string
+  estimated_cost: number | null
+}
+
+interface Signature {
+  id: string
+  signer_name: string | null
+  storage_url: string
+  signed_at: string
 }
 
 const statusBadgeVariant: Record<VisitStatus, 'green' | 'aqua' | 'gray' | 'red'> = {
@@ -45,29 +97,6 @@ const statusBadgeVariant: Record<VisitStatus, 'green' | 'aqua' | 'gray' | 'red'>
   scheduled: 'gray',
   skipped: 'red',
 }
-
-const CHECKLIST_ITEMS = [
-  { key: 'skim_surface', label: 'Skim surface' },
-  { key: 'brush_walls', label: 'Brush walls & tile' },
-  { key: 'vacuum_pool', label: 'Vacuum pool' },
-  { key: 'empty_skimmer_baskets', label: 'Empty skimmer baskets' },
-  { key: 'empty_pump_basket', label: 'Empty pump basket' },
-  { key: 'backwash_filter', label: 'Backwash filter' },
-  { key: 'check_equipment', label: 'Check equipment operation' },
-]
-
-const CHEMICAL_FIELDS = [
-  { label: 'pH', beforeKey: 'ph_before', afterKey: 'ph_after', unit: null },
-  { label: 'Chlorine', beforeKey: 'chlorine_before', afterKey: 'chlorine_after', unit: 'ppm' },
-  { label: 'Alkalinity', beforeKey: 'alkalinity_before', afterKey: 'alkalinity_after', unit: 'ppm' },
-  { label: 'CYA', beforeKey: 'cya_before', afterKey: 'cya_after', unit: null },
-] as const
-
-const CHEMICAL_SINGLE_FIELDS = [
-  { label: 'Calcium Hardness', key: 'calcium_hardness', unit: null },
-  { label: 'Salt Level', key: 'salt_level', unit: null },
-  { label: 'Water Temp', key: 'water_temp', unit: '°F' },
-] as const
 
 function formatDuration(arrivedAt: string, departedAt: string): string {
   const ms = new Date(departedAt).getTime() - new Date(arrivedAt).getTime()
@@ -92,24 +121,16 @@ function urgencyVariant(urgency: string): 'green' | 'amber' | 'red' | 'gray' {
   }
 }
 
-function MissingReading() {
-  return (
-    <span className="inline-flex items-center gap-1 text-sand-400">
-      <span>—</span>
-      <AlertTriangle className="h-3.5 w-3.5 text-amber-400" aria-label="Not tested" />
-    </span>
-  )
-}
-
 export default function VisitDetailPage() {
   const params = useParams()
   const router = useRouter()
   const id = params?.id as string
 
-  const [visit, setVisit] = useState<VisitWithRelations | null>(null)
-  const [chemicals, setChemicals] = useState<ChemicalLog[]>([])
-  const [photos, setPhotos] = useState<VisitPhoto[]>([])
-  const [repairs, setRepairs] = useState<RepairRequest[]>([])
+  const [visit, setVisit] = useState<Visit | null>(null)
+  const [fieldValues, setFieldValues] = useState<FieldValue[]>([])
+  const [photos, setPhotos] = useState<Photo[]>([])
+  const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>([])
+  const [signatures, setSignatures] = useState<Signature[]>([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
 
@@ -120,29 +141,38 @@ export default function VisitDetailPage() {
     async function fetchVisitData() {
       const supabase = createClient()
 
-      const [visitRes, chemRes, photoRes, repairRes] = await Promise.all([
+      const [visitRes, fieldValuesRes, photosRes, ordersRes, signaturesRes] = await Promise.all([
         supabase
-          .from('service_visits')
+          .from('visits')
           .select(
-            `*, customer:customers(*), technician:users!service_visits_technician_id_fkey(full_name, email, phone)`
+            `*, jobsite:jobsites(id, name, address_line1, city, state, zip, contact_name, contact_phone),
+             technician:users!visits_technician_id_fkey(full_name, email, phone)`
           )
           .eq('id', id)
           .single(),
         supabase
-          .from('chemical_logs')
-          .select('*')
-          .eq('visit_id', id)
-          .order('logged_at', { ascending: true }),
+          .from('field_values')
+          .select('id, value, field_definition:field_definitions(id, label, field_type, sort_order)')
+          .eq('entity_type', 'visit')
+          .eq('entity_id', id)
+          .order('created_at', { ascending: true }),
         supabase
-          .from('visit_photos')
-          .select('*')
-          .eq('visit_id', id)
-          .order('uploaded_at', { ascending: true }),
+          .from('photos')
+          .select('id, storage_url, caption, photo_type')
+          .eq('entity_type', 'visit')
+          .eq('entity_id', id)
+          .order('created_at', { ascending: true }),
         supabase
-          .from('repair_requests')
-          .select('*')
+          .from('service_orders')
+          .select('id, title, description, urgency, status, estimated_cost')
           .eq('visit_id', id)
           .order('created_at', { ascending: true }),
+        supabase
+          .from('signatures')
+          .select('id, signer_name, storage_url, signed_at')
+          .eq('entity_type', 'visit')
+          .eq('entity_id', id)
+          .order('signed_at', { ascending: true }),
       ])
 
       if (!visitRes.data) {
@@ -151,10 +181,11 @@ export default function VisitDetailPage() {
         return
       }
 
-      setVisit((visitRes.data as unknown as VisitWithRelations) ?? null)
-      setChemicals((chemRes.data as ChemicalLog[]) ?? [])
-      setPhotos((photoRes.data as VisitPhoto[]) ?? [])
-      setRepairs((repairRes.data as RepairRequest[]) ?? [])
+      setVisit(visitRes.data as unknown as Visit)
+      setFieldValues((fieldValuesRes.data ?? []) as unknown as FieldValue[])
+      setPhotos((photosRes.data ?? []) as Photo[])
+      setServiceOrders((ordersRes.data ?? []) as ServiceOrder[])
+      setSignatures((signaturesRes.data ?? []) as Signature[])
       setLoading(false)
     }
 
@@ -170,7 +201,6 @@ export default function VisitDetailPage() {
           <div className="space-y-4 lg:col-span-2">
             <Skeleton className="h-40 w-full" />
             <Skeleton className="h-56 w-full" />
-            <Skeleton className="h-72 w-full" />
             <Skeleton className="h-24 w-full" />
           </div>
           <div className="space-y-4">
@@ -197,7 +227,11 @@ export default function VisitDetailPage() {
     )
   }
 
-  const checklist = visit.checklist as Record<string, boolean> | null
+  const sortedFieldValues = [...fieldValues].sort((a, b) => {
+    const aOrder = a.field_definition?.sort_order ?? 0
+    const bOrder = b.field_definition?.sort_order ?? 0
+    return aOrder - bOrder
+  })
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
@@ -216,15 +250,14 @@ export default function VisitDetailPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="font-display text-2xl font-bold text-sand-900 sm:text-3xl">
-            {visit.customer?.first_name} {visit.customer?.last_name}
+            {visit.jobsite?.name ?? 'Visit'}
           </h1>
           <p className="mt-0.5 text-sm text-sand-500">
-            {visit.customer?.address_line1}
-            {visit.customer?.city && `, ${visit.customer.city}`}
-            {visit.customer?.state && `, ${visit.customer.state}`}
-            {visit.customer?.zip && ` ${visit.customer.zip}`}
+            {visit.jobsite?.address_line1}
+            {visit.jobsite?.city && `, ${visit.jobsite.city}`}
+            {visit.jobsite?.state && `, ${visit.jobsite.state}`}
+            {visit.jobsite?.zip && ` ${visit.jobsite.zip}`}
           </p>
-
         </div>
         <div className="flex-shrink-0">
           <Badge variant={statusBadgeVariant[visit.status]} className="text-sm">
@@ -246,13 +279,10 @@ export default function VisitDetailPage() {
                 Timestamps &amp; Location
               </div>
             </CardTitle>
-            {visit.geofence_flagged && (
+            {visit.geofence_verified === false && (
               <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
                 <AlertTriangle className="h-4 w-4 flex-shrink-0 text-red-500" />
-                Geofence alert —{' '}
-                {visit.arrived_distance_meters != null
-                  ? `${Math.round(visit.arrived_distance_meters)}m from service address`
-                  : 'Technician was outside the service area when they arrived'}
+                Geofence alert — Technician was outside the expected area when they arrived
               </div>
             )}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -265,11 +295,6 @@ export default function VisitDetailPage() {
                   <p className="mt-1 flex items-center gap-0.5 text-[11px] text-sand-400">
                     <MapPin className="h-3 w-3" />
                     {visit.arrived_lat.toFixed(5)}, {visit.arrived_lng.toFixed(5)}
-                  </p>
-                )}
-                {visit.arrived_distance_meters != null && !visit.geofence_flagged && (
-                  <p className="mt-0.5 text-[11px] text-sand-400">
-                    {Math.round(visit.arrived_distance_meters)}m from service address
                   </p>
                 )}
               </div>
@@ -314,137 +339,37 @@ export default function VisitDetailPage() {
                 </div>
               </div>
             </div>
-          </Card>
 
-          {/* Service Checklist Card */}
-          <Card>
-            <CardTitle>
-              <div className="flex items-center gap-2">
-                <ClipboardList className="h-4 w-4 text-aqua-500" />
-                Service Checklist
+            {/* Jobsite contact */}
+            {visit.jobsite?.contact_name && (
+              <div className="mt-3 flex items-center gap-2 border-t border-sand-100 pt-3 text-sm text-sand-500">
+                <span className="font-medium">Site contact:</span>
+                {visit.jobsite.contact_name}
+                {visit.jobsite.contact_phone && ` · ${visit.jobsite.contact_phone}`}
               </div>
-            </CardTitle>
-            {checklist && typeof checklist === 'object' && Object.keys(checklist).length > 0 ? (
-              <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-                {CHECKLIST_ITEMS.map((item) => {
-                  const checked = !!(checklist)?.[item.key]
-                  return (
-                    <div
-                      key={item.key}
-                      className="flex items-center gap-2.5 rounded-md px-2 py-1.5"
-                    >
-                      {checked ? (
-                        <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-emerald-500" />
-                      ) : (
-                        <Circle className="h-4 w-4 flex-shrink-0 text-sand-300" />
-                      )}
-                      <span className={cn('text-sm', checked ? 'text-sand-700' : 'text-sand-400')}>
-                        {item.label}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <p className="text-sm italic text-sand-400">No checklist recorded</p>
             )}
           </Card>
 
-          {/* Chemical Log Card */}
+          {/* Dynamic Field Values Card */}
           <Card>
             <CardTitle>
               <div className="flex items-center gap-2">
-                <FlaskConical className="h-4 w-4 text-emerald-500" />
-                Chemical Log
+                <Layers className="h-4 w-4 text-aqua-500" />
+                Field Data
               </div>
             </CardTitle>
-
-            {chemicals.length === 0 ? (
-              <div className="flex items-start gap-3 rounded-lg bg-amber-50 px-4 py-3">
-                <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-500" />
-                <div>
-                  <p className="text-sm font-medium text-amber-800">No chemical log recorded</p>
-                  <p className="text-xs text-amber-600">The technician did not log any chemical readings for this visit.</p>
-                </div>
-              </div>
+            {sortedFieldValues.length === 0 ? (
+              <p className="text-sm italic text-sand-400">No field data recorded</p>
             ) : (
-              <div className="space-y-5">
-                {chemicals.map((chem) => (
-                  <div key={chem.id} className="rounded-lg border border-sand-100 bg-white p-4">
-                    {/* Before/After readings */}
-                    <div className="mb-4">
-                      <div className="mb-2 grid grid-cols-3 gap-2 text-xs font-medium text-sand-400 uppercase tracking-wide">
-                        <div>Parameter</div>
-                        <div>Before</div>
-                        <div>After</div>
-                      </div>
-                      <div className="divide-y divide-sand-50">
-                        {CHEMICAL_FIELDS.map(({ label, beforeKey, afterKey, unit }) => {
-                          const beforeVal = chem[beforeKey]
-                          const afterVal = chem[afterKey]
-                          return (
-                            <div key={label} className="grid grid-cols-3 gap-2 py-2 text-sm">
-                              <div className="font-medium text-sand-600">
-                                {label}
-                                {unit && <span className="ml-1 text-xs font-normal text-sand-400">({unit})</span>}
-                              </div>
-                              <div>
-                                {beforeVal != null ? (
-                                  <span className="text-sand-800">{beforeVal}</span>
-                                ) : (
-                                  <MissingReading />
-                                )}
-                              </div>
-                              <div>
-                                {afterVal != null ? (
-                                  <span className="font-medium text-emerald-600">{afterVal}</span>
-                                ) : (
-                                  <MissingReading />
-                                )}
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Single value readings */}
-                    <div className="grid grid-cols-3 gap-3 border-t border-sand-100 pt-3">
-                      {CHEMICAL_SINGLE_FIELDS.map(({ label, key, unit }) => {
-                        const val = chem[key]
-                        return (
-                          <div key={key}>
-                            <p className="text-xs text-sand-400">{label}</p>
-                            <p className="mt-0.5 text-sm">
-                              {val != null ? (
-                                <span className="font-medium text-sand-800">
-                                  {val}{unit}
-                                </span>
-                              ) : (
-                                <MissingReading />
-                              )}
-                            </p>
-                          </div>
-                        )
-                      })}
-                    </div>
-
-                    {/* Chemicals added sub-section */}
-                    {chem.chemical_name && (
-                      <div className="mt-4 border-t border-sand-100 pt-3">
-                        <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-sand-400">
-                          Chemicals Added
-                        </p>
-                        <div className="flex items-center gap-2 text-sm text-sand-700">
-                          <span className="font-medium">{chem.chemical_name}</span>
-                          {chem.amount != null && chem.unit && (
-                            <span className="text-sand-500">
-                              — {chem.amount} {chem.unit}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    )}
+              <div className="divide-y divide-sand-50">
+                {sortedFieldValues.map((fv) => (
+                  <div key={fv.id} className="flex items-start justify-between gap-4 py-2.5">
+                    <p className="text-sm font-medium text-sand-600">
+                      {fv.field_definition?.label ?? 'Unknown field'}
+                    </p>
+                    <p className="text-sm text-sand-800 text-right">
+                      {fv.value ?? '—'}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -512,37 +437,74 @@ export default function VisitDetailPage() {
             )}
           </Card>
 
-          {/* Repair Requests Card */}
+          {/* Service Orders Card */}
           <Card>
             <CardTitle>
               <div className="flex items-center gap-2">
                 <Wrench className="h-4 w-4 text-amber-500" />
-                Repair Requests
-                {repairs.length > 0 && (
-                  <span className="ml-auto text-xs font-normal text-sand-400">{repairs.length}</span>
+                Service Orders
+                {serviceOrders.length > 0 && (
+                  <span className="ml-auto text-xs font-normal text-sand-400">{serviceOrders.length}</span>
                 )}
               </div>
             </CardTitle>
-            {repairs.length === 0 ? (
-              <p className="text-sm italic text-sand-400">No repairs requested</p>
+            {serviceOrders.length === 0 ? (
+              <p className="text-sm italic text-sand-400">No service orders</p>
             ) : (
               <div className="space-y-3">
-                {repairs.map((repair) => (
-                  <div key={repair.id} className="rounded-lg border border-sand-100 bg-white p-3">
+                {serviceOrders.map((order) => (
+                  <div key={order.id} className="rounded-lg border border-sand-100 bg-white p-3">
                     <div className="flex flex-wrap items-start justify-between gap-1.5">
-                      <p className="text-sm font-medium text-sand-800">
-                        {capitalizeFirst(repair.category.replace(/_/g, ' '))}
-                      </p>
+                      <p className="text-sm font-medium text-sand-800">{order.title}</p>
                       <div className="flex flex-wrap gap-1">
-                        <Badge variant={urgencyVariant(repair.urgency)}>
-                          {capitalizeFirst(repair.urgency)}
+                        <Badge variant={urgencyVariant(order.urgency)}>
+                          {capitalizeFirst(order.urgency)}
                         </Badge>
                         <Badge variant="gray">
-                          {capitalizeFirst(repair.status.replace(/_/g, ' '))}
+                          {capitalizeFirst(order.status.replace(/_/g, ' '))}
                         </Badge>
                       </div>
                     </div>
-                    <p className="mt-1.5 text-xs text-sand-500">{repair.description}</p>
+                    {order.description && (
+                      <p className="mt-1.5 text-xs text-sand-500">{order.description}</p>
+                    )}
+                    {order.estimated_cost != null && (
+                      <p className="mt-1 text-xs font-medium text-sand-600">
+                        Est. cost: ${order.estimated_cost.toFixed(2)}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          {/* Signatures Card */}
+          <Card>
+            <CardTitle>
+              <div className="flex items-center gap-2">
+                <PenTool className="h-4 w-4 text-indigo-500" />
+                Signatures
+                {signatures.length > 0 && (
+                  <span className="ml-auto text-xs font-normal text-sand-400">{signatures.length}</span>
+                )}
+              </div>
+            </CardTitle>
+            {signatures.length === 0 ? (
+              <p className="text-sm italic text-sand-400">No signatures captured</p>
+            ) : (
+              <div className="space-y-3">
+                {signatures.map((sig) => (
+                  <div key={sig.id} className="rounded-lg border border-sand-100 bg-white p-3">
+                    <p className="text-sm font-medium text-sand-800">
+                      {sig.signer_name ?? 'Unknown signer'}
+                    </p>
+                    <p className="text-xs text-sand-400">{formatDateTime(sig.signed_at)}</p>
+                    <img
+                      src={sig.storage_url}
+                      alt={`Signature by ${sig.signer_name ?? 'unknown'}`}
+                      className="mt-2 h-16 rounded border border-sand-100"
+                    />
                   </div>
                 ))}
               </div>

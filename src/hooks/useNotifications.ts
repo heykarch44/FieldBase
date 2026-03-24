@@ -33,7 +33,7 @@ export function useNotifications() {
 
     try {
       const tokenData = await Notifications.getExpoPushTokenAsync({
-        projectId: "aqua-palm-field-app",
+        projectId: "fieldbase-app",
       });
 
       // Store token in user profile (using a custom column or metadata)

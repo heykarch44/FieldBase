@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardTitle, CardContent } from '@/components/ui/card'
@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatDayOfWeek } from '@/lib/utils'
-import type { Route, Customer, User, DayOfWeek } from '@/lib/types'
+import type { Route, User, DayOfWeek } from '@/lib/types'
 import {
   DndContext,
   closestCenter,
@@ -32,9 +32,16 @@ import { MapPin, Clock, GripVertical, ChevronDown, ChevronUp, User as UserIcon, 
 
 type RouteWithTech = Route & { technician: Pick<User, 'full_name'> }
 
+interface Jobsite {
+  id: string
+  name: string
+  address_line1: string
+  city: string
+}
+
 interface RouteStop {
   id: string
-  customer: Customer | null
+  jobsite: Jobsite | null
 }
 
 const DAYS: DayOfWeek[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
@@ -77,17 +84,17 @@ function SortableStop({
         <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-aqua-100 text-xs font-medium text-aqua-700">
           {index + 1}
         </span>
-        {stop.customer ? (
+        {stop.jobsite ? (
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-sand-900">
-              {stop.customer.first_name} {stop.customer.last_name}
+              {stop.jobsite.name}
             </p>
             <p className="text-xs text-sand-500 truncate">
-              {stop.customer.address_line1}, {stop.customer.city}
+              {stop.jobsite.address_line1}, {stop.jobsite.city}
             </p>
           </div>
         ) : (
-          <p className="text-sm text-sand-400">Unknown customer</p>
+          <p className="text-sm text-sand-400">Unknown jobsite</p>
         )}
         <Eye className="h-4 w-4 flex-shrink-0 text-sand-300" />
       </div>
@@ -95,18 +102,18 @@ function SortableStop({
   )
 }
 
-function RouteCard({ route, customers }: { route: RouteWithTech; customers: Customer[] }) {
+function RouteCard({ route, jobsites }: { route: RouteWithTech; jobsites: Jobsite[] }) {
   const router = useRouter()
   const [expanded, setExpanded] = useState(false)
   const [stops, setStops] = useState<RouteStop[]>([])
 
-  async function handleStopClick(customerId: string) {
+  async function handleStopClick(jobsiteId: string) {
     const supabase = createClient()
     const today = new Date().toISOString().split('T')[0]
     const { data } = await supabase
-      .from('service_visits')
+      .from('visits')
       .select('id')
-      .eq('customer_id', customerId)
+      .eq('jobsite_id', jobsiteId)
       .eq('scheduled_date', today)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -123,12 +130,12 @@ function RouteCard({ route, customers }: { route: RouteWithTech; customers: Cust
 
   useEffect(() => {
     const order = Array.isArray(route.optimized_order) ? route.optimized_order : []
-    const routeStops: RouteStop[] = order.map((custId: string) => ({
-      id: custId,
-      customer: customers.find((c) => c.id === custId) ?? null,
+    const routeStops: RouteStop[] = order.map((jobsiteId: string) => ({
+      id: jobsiteId,
+      jobsite: jobsites.find((j) => j.id === jobsiteId) ?? null,
     }))
     setStops(routeStops)
-  }, [route.optimized_order, customers])
+  }, [route.optimized_order, jobsites])
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
@@ -214,22 +221,22 @@ function RouteCard({ route, customers }: { route: RouteWithTech; customers: Cust
 
 export default function RoutesPage() {
   const [routes, setRoutes] = useState<RouteWithTech[]>([])
-  const [customers, setCustomers] = useState<Customer[]>([])
+  const [jobsites, setJobsites] = useState<Jobsite[]>([])
   const [loading, setLoading] = useState(true)
   const [activeDay, setActiveDay] = useState<DayOfWeek>('mon')
 
   useEffect(() => {
     async function fetchData() {
       const supabase = createClient()
-      const [routesRes, customersRes] = await Promise.all([
+      const [routesRes, jobsitesRes] = await Promise.all([
         supabase
           .from('routes')
           .select('*, technician:users!routes_technician_id_fkey(full_name)')
           .order('name'),
-        supabase.from('customers').select('*'),
+        supabase.from('jobsites').select('id, name, address_line1, city'),
       ])
       setRoutes((routesRes.data ?? []) as unknown as RouteWithTech[])
-      setCustomers((customersRes.data ?? []) as Customer[])
+      setJobsites((jobsitesRes.data ?? []) as Jobsite[])
       setLoading(false)
 
       // Set active day to first day that has routes
@@ -298,7 +305,7 @@ export default function RoutesPage() {
           </Card>
         ) : (
           filteredRoutes.map((route) => (
-            <RouteCard key={route.id} route={route} customers={customers} />
+            <RouteCard key={route.id} route={route} jobsites={jobsites} />
           ))
         )}
       </div>

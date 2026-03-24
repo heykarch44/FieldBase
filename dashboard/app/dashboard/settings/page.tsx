@@ -3,15 +3,24 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Settings, User, Shield, Bell } from 'lucide-react'
-import type { User as UserType } from '@/lib/types'
+import { Settings, User, Shield, Bell, Layers } from 'lucide-react'
+
+interface UserProfile {
+  id: string
+  full_name: string
+  email: string
+  phone: string | null
+  role: string
+}
 
 export default function SettingsPage() {
-  const [user, setUser] = useState<UserType | null>(null)
+  const router = useRouter()
+  const [user, setUser] = useState<UserProfile | null>(null)
 
   useEffect(() => {
     async function fetchUser() {
@@ -20,12 +29,27 @@ export default function SettingsPage() {
         data: { user: authUser },
       } = await supabase.auth.getUser()
       if (authUser) {
-        const { data } = await supabase
+        // Get user profile
+        const { data: userData } = await supabase
           .from('users')
-          .select('*')
+          .select('id, full_name, email, phone')
           .eq('id', authUser.id)
           .single()
-        setUser(data as UserType | null)
+
+        // Get org role from org_members
+        const { data: memberData } = await supabase
+          .from('org_members')
+          .select('role')
+          .eq('user_id', authUser.id)
+          .limit(1)
+          .maybeSingle()
+
+        if (userData) {
+          setUser({
+            ...userData,
+            role: memberData?.role ?? 'viewer',
+          })
+        }
       }
     }
     fetchUser()
@@ -73,6 +97,25 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
+        {/* Field Definitions */}
+        <Card>
+          <CardTitle>
+            <Layers className="inline h-4 w-4 mr-2" />
+            Field Definitions
+          </CardTitle>
+          <CardContent>
+            <div className="space-y-4 text-sm">
+              <p className="text-sand-600">
+                Configure custom fields for visits, jobsites, and other entities.
+                Define industry-specific data capture templates.
+              </p>
+              <Button onClick={() => router.push('/dashboard/settings/fields')}>
+                Manage Fields
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Security */}
         <Card>
           <CardTitle>
@@ -103,8 +146,8 @@ export default function SettingsPage() {
               <p>Notification preferences coming soon.</p>
               <div className="rounded-lg bg-sand-50 p-3">
                 <p className="text-xs text-sand-500">
-                  Email notifications for repair requests, schedule changes, and customer
-                  updates will be configurable here in a future release.
+                  Email notifications for service orders, schedule changes, and
+                  jobsite updates will be configurable here in a future release.
                 </p>
               </div>
             </div>

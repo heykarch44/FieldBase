@@ -1,5 +1,5 @@
 export const Colors = {
-  aqua: {
+  primary: {
     50: "#ecfeff",
     100: "#cffafe",
     200: "#a5f3fc",
@@ -47,7 +47,7 @@ export const Colors = {
 
 export const VisitStatusColors: Record<string, string> = {
   scheduled: Colors.gray[400],
-  in_progress: Colors.aqua[600],
+  in_progress: Colors.primary[600],
   completed: Colors.success,
   skipped: Colors.error,
 };

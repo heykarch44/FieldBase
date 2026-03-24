@@ -70,12 +70,3 @@ export function capitalizeFirst(str: string): string {
 export function formatRepairStatus(status: string): string {
   return status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
-
-export function formatPoolType(type: string): string {
-  const types: Record<string, string> = {
-    chlorine: 'Chlorine',
-    saltwater: 'Saltwater',
-    other: 'Other',
-  }
-  return types[type] ?? type
-}

@@ -75,7 +75,7 @@ export default function ProfileScreen() {
           )}
           <View style={styles.roleBadge}>
             <Text style={styles.roleText}>
-              {user?.role ?? "—"}
+              {user?.org_role ?? "—"}
             </Text>
           </View>
         </View>
@@ -112,7 +112,7 @@ export default function ProfileScreen() {
               <Ionicons
                 name="finger-print"
                 size={22}
-                color={Colors.aqua[600]}
+                color={Colors.primary[600]}
               />
               <Text style={styles.settingLabel}>
                 Biometric Login
@@ -121,8 +121,8 @@ export default function ProfileScreen() {
             <Switch
               value={biometricEnabled}
               onValueChange={toggleBiometric}
-              trackColor={{ false: Colors.gray[300], true: Colors.aqua[400] }}
-              thumbColor={biometricEnabled ? Colors.aqua[600] : Colors.gray[100]}
+              trackColor={{ false: Colors.gray[300], true: Colors.primary[400] }}
+              thumbColor={biometricEnabled ? Colors.primary[600] : Colors.gray[100]}
             />
           </View>
         )}
@@ -132,7 +132,7 @@ export default function ProfileScreen() {
             <Ionicons
               name="notifications-outline"
               size={22}
-              color={Colors.aqua[600]}
+              color={Colors.primary[600]}
             />
             <Text style={styles.settingLabel}>
               Push Notifications
@@ -141,8 +141,8 @@ export default function ProfileScreen() {
           <Switch
             value={notificationsEnabled}
             onValueChange={setNotificationsEnabled}
-            trackColor={{ false: Colors.gray[300], true: Colors.aqua[400] }}
-            thumbColor={notificationsEnabled ? Colors.aqua[600] : Colors.gray[100]}
+            trackColor={{ false: Colors.gray[300], true: Colors.primary[400] }}
+            thumbColor={notificationsEnabled ? Colors.primary[600] : Colors.gray[100]}
           />
         </View>
       </Card>

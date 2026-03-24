@@ -25,7 +25,7 @@ export default function LoginScreen() {
 
   useEffect(() => {
     if (!loading && session && user) {
-      if (user.role === "technician" || user.role === "admin") {
+      if (user.org_role === "technician" || user.org_role === "admin" || user.org_role === "owner") {
         router.replace("/(tabs)");
       }
     }
@@ -39,7 +39,7 @@ export default function LoginScreen() {
 
   const handleBiometricLogin = async () => {
     const success = await authenticateWithBiometrics();
-    if (success && user && (user.role === "technician" || user.role === "admin")) {
+    if (success && user && (user.org_role === "technician" || user.org_role === "admin" || user.org_role === "owner")) {
       router.replace("/(tabs)");
     }
   };
@@ -89,10 +89,10 @@ export default function LoginScreen() {
                 marginBottom: 16,
               }}
             >
-              <Ionicons name="water" size={48} color="white" />
+              <Ionicons name="layers" size={48} color="white" />
             </View>
             <Text style={{ color: "white", fontSize: 30, fontWeight: "bold" }}>
-              Aqua Palm
+              FieldBase
             </Text>
             <Text style={{ color: "#a5f3fc", fontSize: 16, marginTop: 4 }}>
               Field Technician
@@ -134,7 +134,7 @@ export default function LoginScreen() {
                 <Ionicons name="mail-outline" size={20} color="#9ca3af" />
                 <TextInput
                   style={{ flex: 1, paddingVertical: 14, paddingHorizontal: 12, fontSize: 16, color: "#111827" }}
-                  placeholder="tech@aquapalm.com"
+                  placeholder="tech@example.com"
                   placeholderTextColor="#9ca3af"
                   value={email}
                   onChangeText={setEmail}

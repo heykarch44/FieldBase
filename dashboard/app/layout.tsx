@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Aqua Palm Dashboard',
-  description: 'Office management dashboard for Aqua Palm Pool Service',
+  title: 'FieldBase Dashboard',
+  description: 'Office management dashboard for FieldBase field service platform',
 }
 
 export default function RootLayout({
