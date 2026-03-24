@@ -390,6 +390,7 @@ export default function AdminPage() {
                   </Fragment>
                 )
               })}
+            </tbody>
           </table>
         </div>
       </Card>
