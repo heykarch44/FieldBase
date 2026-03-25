@@ -11,30 +11,42 @@ export default function Home() {
 
   useEffect(() => {
     const supabase = createClient()
-
-    // Check if we landed here with auth tokens in the hash (email confirmation redirect)
     const hash = window.location.hash
-    if (hash && hash.includes('access_token')) {
-      // Supabase client auto-detects hash tokens and sets the session
-      supabase.auth.onAuthStateChange((event, session) => {
-        if (session) {
-          router.replace('/dashboard')
-        }
-      })
-      return
-    }
 
-    // No hash tokens — check if already logged in, otherwise go to login
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    async function handleAuth() {
+      if (hash && hash.includes('access_token')) {
+        // Parse the hash tokens manually and set the session
+        const params = new URLSearchParams(hash.substring(1))
+        const accessToken = params.get('access_token')
+        const refreshToken = params.get('refresh_token')
+
+        if (accessToken && refreshToken) {
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          })
+
+          if (!error) {
+            // Clear the hash from the URL
+            window.history.replaceState(null, '', '/')
+            router.replace('/dashboard')
+            return
+          }
+        }
+      }
+
+      // No hash tokens or session set failed — check existing session
+      const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         router.replace('/dashboard')
       } else {
         router.replace('/login')
       }
-    })
+    }
+
+    handleAuth()
   }, [router])
 
-  // Brief loading state while we check auth
   return (
     <div className="flex min-h-screen items-center justify-center bg-sand-50">
       <div className="h-8 w-8 animate-spin rounded-full border-4 border-sand-200 border-t-indigo-600" />
