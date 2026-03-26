@@ -30,6 +30,13 @@ import {
   User,
   AlertTriangle,
   Info,
+  Upload,
+  Download,
+  Trash2,
+  File,
+  FileSpreadsheet,
+  FileImage,
+  Loader2,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -290,7 +297,7 @@ export default function SiteDetailPage() {
         />
       )}
       {activeTab === 'visits' && <VisitsTab visits={visits} />}
-      {activeTab === 'documents' && <DocumentsTab />}
+      {activeTab === 'documents' && <DocumentsTab orgId={activeOrgId} siteId={id} />}
       {activeTab === 'equipment' && <EquipmentTab equipment={equipment} />}
 
       {/* Add Service Order Modal */}
@@ -660,20 +667,425 @@ function VisitsTab({ visits }: { visits: Visit[] }) {
 }
 
 // ---------------------------------------------------------------------------
-// Tab: Documents (placeholder)
+// Tab: Documents
 // ---------------------------------------------------------------------------
 
-function DocumentsTab() {
-  return (
-    <Card>
-      <div className="flex flex-col items-center py-12 text-center">
-        <FileText className="mb-3 h-10 w-10 text-sand-300" />
-        <p className="font-medium text-sand-600">Documents — Coming soon</p>
-        <p className="mt-1 text-sm text-sand-400">
-          Upload and manage site documents, permits, and contracts.
-        </p>
+interface DocumentRecord {
+  id: string
+  org_id: string
+  entity_type: string
+  entity_id: string
+  doc_type: string
+  name: string
+  storage_url: string
+  file_size_bytes: number | null
+  mime_type: string | null
+  uploaded_by: string | null
+  created_at: string
+  uploader?: { full_name: string } | null
+}
+
+const DOC_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'plan', label: 'Plan' },
+  { value: 'permit', label: 'Permit' },
+  { value: 'contract', label: 'Contract' },
+  { value: 'photo_report', label: 'Photo Report' },
+  { value: 'inspection', label: 'Inspection' },
+  { value: 'invoice', label: 'Invoice' },
+  { value: 'other', label: 'Other' },
+]
+
+const DOC_TYPE_LABELS: Record<string, string> = {
+  plan: 'Plan',
+  permit: 'Permit',
+  contract: 'Contract',
+  photo_report: 'Photo Report',
+  inspection: 'Inspection',
+  invoice: 'Invoice',
+  other: 'Other',
+}
+
+const DOC_TYPE_BADGE_VARIANT: Record<string, 'teal' | 'amber' | 'green' | 'red' | 'gray' | 'default'> = {
+  plan: 'teal',
+  permit: 'amber',
+  contract: 'green',
+  photo_report: 'default',
+  inspection: 'red',
+  invoice: 'gray',
+  other: 'gray',
+}
+
+function formatFileSize(bytes: number | null): string {
+  if (!bytes) return '—'
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function getFileIcon(mimeType: string | null) {
+  if (!mimeType) return <File className="h-8 w-8 text-sand-400" />
+  if (mimeType.startsWith('image/')) return <FileImage className="h-8 w-8 text-teal-500" />
+  if (mimeType === 'application/pdf') return <FileText className="h-8 w-8 text-red-500" />
+  if (
+    mimeType.includes('spreadsheet') ||
+    mimeType.includes('excel') ||
+    mimeType === 'text/csv'
+  )
+    return <FileSpreadsheet className="h-8 w-8 text-emerald-500" />
+  return <File className="h-8 w-8 text-sand-400" />
+}
+
+function DocumentsTab({ orgId, siteId }: { orgId: string | null; siteId: string }) {
+  const [documents, setDocuments] = useState<DocumentRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showUploadModal, setShowUploadModal] = useState(false)
+  const [deleting, setDeleting] = useState<string | null>(null)
+
+  const fetchDocuments = useCallback(async () => {
+    if (!siteId) return
+    setLoading(true)
+    const supabase = createClient()
+    const { data } = await supabase
+      .from('documents')
+      .select('*, uploader:users!documents_uploaded_by_fkey(full_name)')
+      .eq('entity_type', 'jobsite')
+      .eq('entity_id', siteId)
+      .order('created_at', { ascending: false })
+    setDocuments((data ?? []) as DocumentRecord[])
+    setLoading(false)
+  }, [siteId])
+
+  useEffect(() => {
+    fetchDocuments()
+  }, [fetchDocuments])
+
+  async function handleDownload(doc: DocumentRecord) {
+    const supabase = createClient()
+    const { data, error } = await supabase.storage
+      .from('fieldbase')
+      .createSignedUrl(doc.storage_url, 3600)
+    if (error || !data?.signedUrl) {
+      alert('Failed to generate download link.')
+      return
+    }
+    window.open(data.signedUrl, '_blank')
+  }
+
+  async function handleDelete(doc: DocumentRecord) {
+    if (!confirm(`Delete "${doc.name}"? This cannot be undone.`)) return
+    setDeleting(doc.id)
+    const supabase = createClient()
+    await supabase.storage.from('fieldbase').remove([doc.storage_url])
+    await supabase.from('documents').delete().eq('id', doc.id)
+    setDeleting(null)
+    fetchDocuments()
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="h-9 w-36" />
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-44 w-full rounded-xl" />
+          ))}
+        </div>
       </div>
-    </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-sand-500">
+          {documents.length} document{documents.length !== 1 ? 's' : ''}
+        </p>
+        <Button onClick={() => setShowUploadModal(true)}>
+          <Upload className="h-4 w-4" />
+          Upload Document
+        </Button>
+      </div>
+
+      {documents.length === 0 ? (
+        <Card>
+          <div className="flex flex-col items-center py-12 text-center">
+            <FileText className="mb-3 h-10 w-10 text-sand-300" />
+            <p className="font-medium text-sand-600">No documents yet</p>
+            <p className="mt-1 text-sm text-sand-400">
+              Upload site documents, permits, and contracts.
+            </p>
+          </div>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {documents.map((doc) => (
+            <Card key={doc.id} className="flex flex-col justify-between p-4">
+              <div>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-3">
+                    {getFileIcon(doc.mime_type)}
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-sand-900">{doc.name}</p>
+                      <Badge variant={DOC_TYPE_BADGE_VARIANT[doc.doc_type] ?? 'gray'} className="mt-1">
+                        {DOC_TYPE_LABELS[doc.doc_type] ?? capitalizeFirst(doc.doc_type)}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3 space-y-1 text-xs text-sand-500">
+                  <p>{formatFileSize(doc.file_size_bytes)}</p>
+                  <p>{formatDate(doc.created_at)}</p>
+                  {doc.uploader?.full_name && (
+                    <p className="flex items-center gap-1">
+                      <User className="h-3 w-3" />
+                      {doc.uploader.full_name}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="mt-4 flex items-center gap-2 border-t border-sand-100 pt-3">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => handleDownload(doc)}
+                  className="flex-1"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download
+                </Button>
+                <Button
+                  size="sm"
+                  variant="danger"
+                  onClick={() => handleDelete(doc)}
+                  disabled={deleting === doc.id}
+                >
+                  {deleting === doc.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Upload Document Modal */}
+      <Modal
+        open={showUploadModal}
+        onClose={() => setShowUploadModal(false)}
+        title="Upload Document"
+        className="max-w-lg"
+      >
+        <UploadDocumentForm
+          orgId={orgId}
+          siteId={siteId}
+          onSuccess={() => {
+            setShowUploadModal(false)
+            fetchDocuments()
+          }}
+          onCancel={() => setShowUploadModal(false)}
+        />
+      </Modal>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Upload Document Form
+// ---------------------------------------------------------------------------
+
+function UploadDocumentForm({
+  orgId,
+  siteId,
+  onSuccess,
+  onCancel,
+}: {
+  orgId: string | null
+  siteId: string
+  onSuccess: () => void
+  onCancel: () => void
+}) {
+  const [file, setFile] = useState<globalThis.File | null>(null)
+  const [docName, setDocName] = useState('')
+  const [docType, setDocType] = useState('other')
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [dragOver, setDragOver] = useState(false)
+
+  function handleFileSelect(selectedFile: globalThis.File | null) {
+    if (!selectedFile) return
+    setFile(selectedFile)
+    // Auto-fill name from filename (without extension)
+    const nameWithoutExt = selectedFile.name.replace(/\.[^/.]+$/, '')
+    setDocName(nameWithoutExt)
+  }
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (!orgId) {
+      setError('No organization found. Please refresh and try again.')
+      return
+    }
+    if (!file) {
+      setError('Please select a file to upload.')
+      return
+    }
+    if (!docName.trim()) {
+      setError('Please enter a document name.')
+      return
+    }
+
+    setUploading(true)
+    setError(null)
+
+    const supabase = createClient()
+
+    // Get current user for uploaded_by
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    // 1. Upload file to storage
+    const filePath = `${orgId}/documents/jobsite/${siteId}/${Date.now()}_${file.name}`
+    const { error: uploadError } = await supabase.storage
+      .from('fieldbase')
+      .upload(filePath, file)
+
+    if (uploadError) {
+      setUploading(false)
+      setError(uploadError.message)
+      return
+    }
+
+    // 2. Insert record into documents table
+    const { error: insertError } = await supabase.from('documents').insert({
+      org_id: orgId,
+      entity_type: 'jobsite',
+      entity_id: siteId,
+      doc_type: docType,
+      name: docName.trim(),
+      storage_url: filePath,
+      file_size_bytes: file.size,
+      mime_type: file.type || null,
+      uploaded_by: user?.id ?? null,
+    })
+
+    setUploading(false)
+
+    if (insertError) {
+      // Clean up orphaned storage file
+      await supabase.storage.from('fieldbase').remove([filePath])
+      setError(insertError.message)
+    } else {
+      onSuccess()
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {error && (
+        <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>
+      )}
+
+      {/* Drag & Drop / File Input Zone */}
+      <div
+        onDragOver={(e) => {
+          e.preventDefault()
+          setDragOver(true)
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault()
+          setDragOver(false)
+          const droppedFile = e.dataTransfer.files?.[0]
+          if (droppedFile) handleFileSelect(droppedFile)
+        }}
+        className={cn(
+          'relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed px-4 py-8 text-center transition-colors',
+          dragOver
+            ? 'border-teal-400 bg-teal-50'
+            : file
+            ? 'border-teal-300 bg-teal-50/50'
+            : 'border-sand-300 bg-sand-50 hover:border-sand-400'
+        )}
+      >
+        {file ? (
+          <>
+            {getFileIcon(file.type)}
+            <p className="mt-2 text-sm font-medium text-sand-800">{file.name}</p>
+            <p className="text-xs text-sand-500">{formatFileSize(file.size)}</p>
+            <button
+              type="button"
+              onClick={() => {
+                setFile(null)
+                setDocName('')
+              }}
+              className="mt-2 text-xs font-medium text-teal-600 hover:text-teal-700"
+            >
+              Change file
+            </button>
+          </>
+        ) : (
+          <>
+            <Upload className="h-8 w-8 text-sand-400" />
+            <p className="mt-2 text-sm font-medium text-sand-700">
+              Drag &amp; drop a file here, or click to browse
+            </p>
+            <p className="mt-1 text-xs text-sand-400">Max 10 MB</p>
+          </>
+        )}
+        <input
+          type="file"
+          className="absolute inset-0 cursor-pointer opacity-0"
+          onChange={(e) => handleFileSelect(e.target.files?.[0] ?? null)}
+        />
+      </div>
+
+      {/* Document Name */}
+      <div>
+        <label className="mb-1 block text-sm font-medium text-sand-700">Document Name *</label>
+        <Input
+          value={docName}
+          onChange={(e) => setDocName(e.target.value)}
+          required
+          placeholder="e.g., Site Permit 2025"
+        />
+      </div>
+
+      {/* Category */}
+      <Select
+        name="doc_type"
+        label="Category"
+        value={docType}
+        onChange={(e) => setDocType(e.target.value)}
+        options={DOC_TYPE_OPTIONS}
+      />
+
+      {/* Actions */}
+      <div className="flex justify-end gap-3 pt-2">
+        <Button type="button" variant="secondary" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={uploading || !file}>
+          {uploading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Uploading...
+            </>
+          ) : (
+            <>
+              <Upload className="h-4 w-4" />
+              Upload
+            </>
+          )}
+        </Button>
+      </div>
+    </form>
   )
 }
 
