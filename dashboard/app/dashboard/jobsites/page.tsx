@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { TableSkeleton } from '@/components/ui/skeleton'
 import { MapPin, Plus, Search, Building2 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import type { Jobsite, User } from '@/lib/types'
 
 export default function JobsitesPage() {
@@ -18,6 +19,7 @@ export default function JobsitesPage() {
   const [search, setSearch] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
   const [activeOrgId, setActiveOrgId] = useState<string | null>(null)
+  const router = useRouter()
 
   async function fetchJobsites() {
     const supabase = createClient()
@@ -108,7 +110,8 @@ export default function JobsitesPage() {
               {filtered.map((jobsite) => (
                 <tr
                   key={jobsite.id}
-                  className="border-b border-sand-50 transition-colors hover:bg-sand-50/50"
+                  onClick={() => router.push(`/dashboard/jobsites/${jobsite.id}`)}
+                  className="cursor-pointer border-b border-sand-50 transition-colors hover:bg-teal-50/50"
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
