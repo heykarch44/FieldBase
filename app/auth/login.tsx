@@ -61,7 +61,7 @@ export default function LoginScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#0891b2" }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#0d9488" }}>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator size="large" color="white" />
         </View>
@@ -70,7 +70,7 @@ export default function LoginScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#0891b2" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#0d9488" }}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
@@ -92,10 +92,10 @@ export default function LoginScreen() {
               <Ionicons name="layers" size={48} color="white" />
             </View>
             <Text style={{ color: "white", fontSize: 30, fontWeight: "bold" }}>
-              FieldBase
+              FieldIQ
             </Text>
-            <Text style={{ color: "#a5f3fc", fontSize: 16, marginTop: 4 }}>
-              Field Technician
+            <Text style={{ color: "#99f6e4", fontSize: 16, marginTop: 4 }}>
+              Field Service Intelligence
             </Text>
           </View>
 
@@ -192,8 +192,8 @@ export default function LoginScreen() {
                 onPress={handleBiometricLogin}
                 style={{ marginTop: 16, alignItems: "center", paddingVertical: 12 }}
               >
-                <Ionicons name="finger-print" size={32} color="#0891b2" />
-                <Text style={{ color: "#0891b2", fontSize: 14, fontWeight: "500", marginTop: 4 }}>
+                <Ionicons name="finger-print" size={32} color="#0d9488" />
+                <Text style={{ color: "#0d9488", fontSize: 14, fontWeight: "500", marginTop: 4 }}>
                   Use biometrics
                 </Text>
               </TouchableOpacity>

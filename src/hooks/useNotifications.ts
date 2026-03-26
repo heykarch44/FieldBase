@@ -33,7 +33,7 @@ export function useNotifications() {
 
     try {
       const tokenData = await Notifications.getExpoPushTokenAsync({
-        projectId: "fieldbase-app",
+        projectId: "fieldiq-app",
       });
 
       // Store token in user profile (using a custom column or metadata)

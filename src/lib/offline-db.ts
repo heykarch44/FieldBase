@@ -4,7 +4,7 @@ let db: SQLite.SQLiteDatabase | null = null;
 
 export async function getDb(): Promise<SQLite.SQLiteDatabase> {
   if (!db) {
-    db = await SQLite.openDatabaseAsync("fieldbase.db");
+    db = await SQLite.openDatabaseAsync("fieldiq.db");
     await initializeDb(db);
   }
   return db;

@@ -24,7 +24,7 @@ interface AuthContextType extends AuthState {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const BIOMETRIC_KEY = "fieldbase_biometric_enabled";
+const BIOMETRIC_KEY = "fieldiq_biometric_enabled";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>({
@@ -126,7 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const authenticateWithBiometrics = useCallback(async (): Promise<boolean> => {
     if (!state.biometricAvailable || !state.biometricEnabled) return false;
     const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: "Unlock FieldBase",
+      promptMessage: "Unlock FieldIQ",
       fallbackLabel: "Use password",
       disableDeviceFallback: false,
     });
