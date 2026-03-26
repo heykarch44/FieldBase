@@ -85,12 +85,12 @@ export function Sidebar() {
   return (
     <aside className="flex h-screen w-64 flex-col border-r border-sand-200 bg-white">
       <div className="flex h-16 items-center gap-3 border-b border-sand-200 px-6">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-600">
           <Layers className="h-5 w-5 text-white" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="font-display text-sm font-bold text-sand-900 truncate">
-            {org?.name ?? 'FieldBase'}
+            {org?.name ?? 'FieldIQ'}
           </p>
           <p className="text-xs text-sand-400 truncate">{org?.slug ?? 'Dashboard'}</p>
         </div>
@@ -110,7 +110,7 @@ export function Sidebar() {
               className={cn(
                 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                 isActive
-                  ? 'bg-indigo-50 text-indigo-700'
+                  ? 'bg-teal-50 text-teal-700'
                   : 'text-sand-600 hover:bg-sand-50 hover:text-sand-900'
               )}
             >
@@ -126,7 +126,7 @@ export function Sidebar() {
           className={cn(
             'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
             isSettingsActive
-              ? 'bg-indigo-50 text-indigo-700'
+              ? 'bg-teal-50 text-teal-700'
               : 'text-sand-600 hover:bg-sand-50 hover:text-sand-900'
           )}
         >
@@ -145,7 +145,7 @@ export function Sidebar() {
                   className={cn(
                     'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                     isActive
-                      ? 'bg-indigo-50 text-indigo-700'
+                      ? 'bg-teal-50 text-teal-700'
                       : 'text-sand-600 hover:bg-sand-50 hover:text-sand-900'
                   )}
                 >
@@ -162,7 +162,7 @@ export function Sidebar() {
         {isSuperAdmin && (
           <Link
             href="/admin"
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-indigo-600 transition-colors hover:bg-indigo-50"
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-teal-600 transition-colors hover:bg-teal-50"
           >
             <Shield className="h-5 w-5" />
             Admin Panel

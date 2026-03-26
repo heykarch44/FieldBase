@@ -8,7 +8,7 @@ import { Card, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Building, Save } from 'lucide-react'
+import { Building, Save, Route, Calendar } from 'lucide-react'
 import type { Organization } from '@/lib/types'
 
 const TIMEZONES = [
@@ -28,6 +28,7 @@ export default function OrgSettingsPage() {
   const [name, setName] = useState('')
   const [timezone, setTimezone] = useState('')
   const [logoUrl, setLogoUrl] = useState('')
+  const [routesEnabled, setRoutesEnabled] = useState(true)
 
   useEffect(() => {
     fetchOrg()
@@ -58,6 +59,7 @@ export default function OrgSettingsPage() {
       setName(orgData.name)
       setTimezone(orgData.timezone)
       setLogoUrl(orgData.logo_url ?? '')
+      setRoutesEnabled((orgData.settings as Record<string, unknown>)?.routes_enabled !== false)
     }
     setLoading(false)
   }
@@ -67,16 +69,18 @@ export default function OrgSettingsPage() {
     setSaving(true)
 
     const supabase = createClient()
+    const updatedSettings = { ...(org.settings ?? {}), routes_enabled: routesEnabled }
     await supabase
       .from('organizations')
       .update({
         name,
         timezone,
         logo_url: logoUrl || null,
+        settings: updatedSettings,
       })
       .eq('id', org.id)
 
-    setOrg((prev) => (prev ? { ...prev, name, timezone, logo_url: logoUrl || null } : prev))
+    setOrg((prev) => (prev ? { ...prev, name, timezone, logo_url: logoUrl || null, settings: updatedSettings } : prev))
     setSaving(false)
   }
 
@@ -158,9 +162,58 @@ export default function OrgSettingsPage() {
       </Card>
 
       <Card>
+        <CardTitle>Workflow</CardTitle>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-sand-700">
+                Technician Scheduling Mode
+              </label>
+              <p className="text-xs text-sand-500">
+                Choose how technicians see their daily work in the mobile app
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setRoutesEnabled(true)}
+              className={`flex flex-col items-center gap-2 rounded-lg border-2 p-4 transition-colors ${
+                routesEnabled
+                  ? 'border-teal-600 bg-teal-50 text-teal-700'
+                  : 'border-sand-200 bg-white text-sand-500 hover:border-sand-300'
+              }`}
+            >
+              <Route className="h-6 w-6" />
+              <span className="text-sm font-semibold">Routes</span>
+              <span className="text-xs text-center">
+                Daily route list with ordered stops
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setRoutesEnabled(false)}
+              className={`flex flex-col items-center gap-2 rounded-lg border-2 p-4 transition-colors ${
+                !routesEnabled
+                  ? 'border-teal-600 bg-teal-50 text-teal-700'
+                  : 'border-sand-200 bg-white text-sand-500 hover:border-sand-300'
+              }`}
+            >
+              <Calendar className="h-6 w-6" />
+              <span className="text-sm font-semibold">Schedule</span>
+              <span className="text-xs text-center">
+                Appointments &amp; multi-day projects
+              </span>
+            </button>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
         <CardTitle>Plan</CardTitle>
         <div className="flex items-center gap-3">
-          <span className="inline-flex rounded-full bg-indigo-50 px-3 py-1 text-sm font-semibold text-indigo-700 capitalize">
+          <span className="inline-flex rounded-full bg-teal-50 px-3 py-1 text-sm font-semibold text-teal-700 capitalize">
             {org.plan}
           </span>
           <span className="text-sm text-sand-500">
