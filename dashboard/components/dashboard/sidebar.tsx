@@ -24,7 +24,7 @@ import {
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/dashboard/jobsites', label: 'Jobsites', icon: Building2 },
+  { href: '/dashboard/jobsites', label: 'Sites', icon: Building2 },
   { href: '/dashboard/service-orders', label: 'Service Orders', icon: ClipboardList },
   { href: '/dashboard/routes', label: 'Routes', icon: MapPin },
   { href: '/dashboard/technicians', label: 'Technicians', icon: HardHat },

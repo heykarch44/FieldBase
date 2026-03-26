@@ -10,16 +10,28 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { TableSkeleton } from '@/components/ui/skeleton'
 import { MapPin, Plus, Search, Building2 } from 'lucide-react'
-import type { Jobsite } from '@/lib/types'
+import type { Jobsite, User } from '@/lib/types'
 
 export default function JobsitesPage() {
   const [jobsites, setJobsites] = useState<Jobsite[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
+  const [activeOrgId, setActiveOrgId] = useState<string | null>(null)
 
   async function fetchJobsites() {
     const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data: userData } = await supabase
+      .from('users')
+      .select('active_org_id')
+      .eq('id', user.id)
+      .single()
+
+    if (userData?.active_org_id) setActiveOrgId(userData.active_org_id)
+
     const { data } = await supabase
       .from('jobsites')
       .select('*')
@@ -50,21 +62,21 @@ export default function JobsitesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-2xl font-bold text-sand-900">Jobsites</h1>
+          <h1 className="font-display text-2xl font-bold text-sand-900">Sites</h1>
           <p className="text-sm text-sand-500">
             {statusCounts.active} active &middot; {statusCounts.inactive} inactive &middot; {statusCounts.lead} leads
           </p>
         </div>
         <Button onClick={() => setShowAddModal(true)}>
           <Plus className="h-4 w-4" />
-          Add Jobsite
+          Add Site
         </Button>
       </div>
 
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-sand-400" />
         <Input
-          placeholder="Search jobsites..."
+          placeholder="Search sites..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-10"
@@ -77,8 +89,8 @@ export default function JobsitesPage() {
         <Card>
           <div className="flex flex-col items-center py-12 text-center">
             <Building2 className="mb-3 h-10 w-10 text-sand-300" />
-            <p className="text-sand-600 font-medium">No jobsites found</p>
-            <p className="text-sm text-sand-400">Add your first jobsite to get started</p>
+            <p className="text-sand-600 font-medium">No sites found</p>
+            <p className="text-sm text-sand-400">Add your first site to get started</p>
           </div>
         </Card>
       ) : (
@@ -100,8 +112,8 @@ export default function JobsitesPage() {
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-50">
-                        <MapPin className="h-4 w-4 text-indigo-600" />
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-50">
+                        <MapPin className="h-4 w-4 text-teal-600" />
                       </div>
                       <span className="font-medium text-sand-900">{jobsite.name}</span>
                     </div>
@@ -135,10 +147,11 @@ export default function JobsitesPage() {
       <Modal
         open={showAddModal}
         onClose={() => setShowAddModal(false)}
-        title="Add New Jobsite"
+        title="Add New Site"
         className="max-w-xl"
       >
         <AddJobsiteForm
+          orgId={activeOrgId}
           onSuccess={() => {
             setShowAddModal(false)
             fetchJobsites()
@@ -151,22 +164,31 @@ export default function JobsitesPage() {
 }
 
 function AddJobsiteForm({
+  orgId,
   onSuccess,
   onCancel,
 }: {
+  orgId: string | null
   onSuccess: () => void
   onCancel: () => void
 }) {
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (!orgId) {
+      setError('No organization found. Please refresh and try again.')
+      return
+    }
     setSaving(true)
+    setError(null)
 
     const form = new FormData(e.currentTarget)
     const supabase = createClient()
 
-    const { error } = await supabase.from('jobsites').insert({
+    const { error: insertError } = await supabase.from('jobsites').insert({
+      org_id: orgId,
       name: form.get('name') as string,
       contact_name: (form.get('contact_name') as string) || null,
       contact_email: (form.get('contact_email') as string) || null,
@@ -175,17 +197,25 @@ function AddJobsiteForm({
       city: form.get('city') as string,
       state: form.get('state') as string,
       zip: form.get('zip') as string,
+      status: 'active',
       access_notes: (form.get('access_notes') as string) || null,
     })
 
     setSaving(false)
-    if (!error) onSuccess()
+    if (insertError) {
+      setError(insertError.message)
+    } else {
+      onSuccess()
+    }
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {error && (
+        <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>
+      )}
       <div>
-        <label className="mb-1 block text-sm font-medium text-sand-700">Jobsite Name *</label>
+        <label className="mb-1 block text-sm font-medium text-sand-700">Site Name *</label>
         <Input name="name" required placeholder="e.g., Smith Residence" />
       </div>
       <div className="grid grid-cols-2 gap-4">
@@ -232,7 +262,7 @@ function AddJobsiteForm({
       <div className="flex justify-end gap-3">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
         <Button type="submit" disabled={saving}>
-          {saving ? 'Saving...' : 'Add Jobsite'}
+          {saving ? 'Saving...' : 'Add Site'}
         </Button>
       </div>
     </form>
