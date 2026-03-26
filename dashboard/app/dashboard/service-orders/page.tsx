@@ -2,12 +2,15 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Modal } from '@/components/ui/modal'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import {
   DndContext,
   closestCorners,
@@ -20,8 +23,31 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core'
-import { ClipboardList } from 'lucide-react'
+import { ClipboardList, Loader2 } from 'lucide-react'
 import type { ServiceOrder, ServiceOrderStatus, UrgencyLevel } from '@/lib/types'
+
+interface OrgMember {
+  user_id: string
+  full_name: string
+}
+
+const URGENCY_OPTIONS = [
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'emergency', label: 'Emergency' },
+]
+
+const STATUS_OPTIONS = [
+  { value: 'draft', label: 'Draft' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'scheduled', label: 'Scheduled' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'invoiced', label: 'Invoiced' },
+  { value: 'canceled', label: 'Canceled' },
+]
 
 const STATUS_COLUMNS: { key: ServiceOrderStatus; label: string }[] = [
   { key: 'pending', label: 'Pending' },
@@ -130,6 +156,12 @@ function DraggableCard({
           {order.description}
         </p>
       )}
+      {(order as unknown as { assignee?: { full_name: string } }).assignee?.full_name && (
+        <p className="mt-1.5 flex items-center gap-1 text-xs text-teal-600">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-teal-500" />
+          {(order as unknown as { assignee: { full_name: string } }).assignee.full_name}
+        </p>
+      )}
     </div>
   )
 }
@@ -144,6 +176,19 @@ export default function ServiceOrdersPage() {
   const [activeOrder, setActiveOrder] = useState<ServiceOrder | null>(null)
   const [selectedOrder, setSelectedOrder] = useState<ServiceOrder | null>(null)
 
+  // Edit form state
+  const [editTitle, setEditTitle] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [editAssignedTo, setEditAssignedTo] = useState('')
+  const [editScheduledDate, setEditScheduledDate] = useState('')
+  const [editUrgency, setEditUrgency] = useState('medium')
+  const [editStatus, setEditStatus] = useState('pending')
+  const [editEstimatedCost, setEditEstimatedCost] = useState('')
+  const [editActualCost, setEditActualCost] = useState('')
+  const [orgMembers, setOrgMembers] = useState<OrgMember[]>([])
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
   // PointerSensor with a small distance constraint so clicks don't trigger drag
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -151,24 +196,96 @@ export default function ServiceOrdersPage() {
     })
   )
 
-  useEffect(() => {
-    fetchOrders()
-  }, [])
-
-  async function fetchOrders() {
+  const fetchOrders = useCallback(async () => {
     const supabase = createClient()
     const { data } = await supabase
       .from('service_orders')
       .select(`
         *,
         jobsite:jobsites(name),
-        requester:users!service_orders_requested_by_fkey(full_name)
+        requester:users!service_orders_requested_by_fkey(full_name),
+        assignee:users!service_orders_assigned_to_fkey(full_name)
       `)
       .not('status', 'eq', 'canceled')
       .order('created_at', { ascending: false })
 
     setOrders((data as ServiceOrder[]) ?? [])
     setLoading(false)
+  }, [])
+
+  useEffect(() => {
+    fetchOrders()
+  }, [fetchOrders])
+
+  async function fetchOrgMembers() {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { data: userData } = await supabase
+      .from('users')
+      .select('active_org_id')
+      .eq('id', user.id)
+      .single()
+    if (!userData?.active_org_id) return
+
+    const { data: members } = await supabase
+      .from('memberships')
+      .select('user_id, user:users!memberships_user_id_fkey(full_name)')
+      .eq('org_id', userData.active_org_id)
+      .eq('status', 'active')
+
+    if (members) {
+      setOrgMembers(
+        members.map((m: { user_id: string; user: { full_name: string } | null }) => ({
+          user_id: m.user_id,
+          full_name: (m.user as { full_name: string } | null)?.full_name ?? 'Unknown',
+        }))
+      )
+    }
+  }
+
+  function openEditModal(order: ServiceOrder) {
+    setSelectedOrder(order)
+    setEditTitle(order.title)
+    setEditDescription(order.description ?? '')
+    setEditAssignedTo(order.assigned_to ?? '')
+    setEditScheduledDate(order.scheduled_date ?? '')
+    setEditUrgency(order.urgency)
+    setEditStatus(order.status)
+    setEditEstimatedCost(order.estimated_cost != null ? String(order.estimated_cost) : '')
+    setEditActualCost(order.actual_cost != null ? String(order.actual_cost) : '')
+    setSaveError(null)
+    fetchOrgMembers()
+  }
+
+  async function handleSave() {
+    if (!selectedOrder) return
+    setSaving(true)
+    setSaveError(null)
+
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('service_orders')
+      .update({
+        title: editTitle,
+        description: editDescription || null,
+        assigned_to: editAssignedTo || null,
+        scheduled_date: editScheduledDate || null,
+        urgency: editUrgency,
+        status: editStatus,
+        estimated_cost: editEstimatedCost ? parseFloat(editEstimatedCost) : null,
+        actual_cost: editActualCost ? parseFloat(editActualCost) : null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', selectedOrder.id)
+
+    setSaving(false)
+    if (error) {
+      setSaveError(error.message)
+    } else {
+      setSelectedOrder(null)
+      fetchOrders()
+    }
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -256,7 +373,7 @@ export default function ServiceOrdersPage() {
                   <DraggableCard
                     key={order.id}
                     order={order}
-                    onSelect={setSelectedOrder}
+                    onSelect={openEditModal}
                   />
                 ))}
               </DroppableColumn>
@@ -284,27 +401,142 @@ export default function ServiceOrdersPage() {
         <Modal
           open={!!selectedOrder}
           onClose={() => setSelectedOrder(null)}
-          title="Service Order Details"
-          className="max-w-lg"
+          title="Edit Service Order"
+          className="max-w-xl"
         >
           <div className="space-y-4">
-            <div>
-              <h3 className="font-semibold text-sand-900">{selectedOrder.title}</h3>
-              <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${urgencyColor[selectedOrder.urgency]}`}>
-                {selectedOrder.urgency}
-              </span>
+            {/* Read-only info */}
+            <div className="rounded-lg bg-sand-50 p-3 text-sm">
+              <div className="flex flex-wrap gap-x-6 gap-y-1 text-sand-600">
+                <span>
+                  Site:{' '}
+                  <span className="font-medium text-sand-800">
+                    {(selectedOrder as unknown as { jobsite?: { name: string } }).jobsite?.name ?? '—'}
+                  </span>
+                </span>
+                <span>
+                  Requested by:{' '}
+                  <span className="font-medium text-sand-800">
+                    {(selectedOrder as unknown as { requester?: { full_name: string } }).requester?.full_name ?? '—'}
+                  </span>
+                </span>
+                <span>
+                  Created:{' '}
+                  <span className="font-medium text-sand-800">
+                    {new Date(selectedOrder.created_at).toLocaleDateString()}
+                  </span>
+                </span>
+              </div>
             </div>
-            {selectedOrder.description && (
-              <p className="text-sm text-sand-600">{selectedOrder.description}</p>
+
+            {saveError && (
+              <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{saveError}</div>
             )}
-            {selectedOrder.estimated_cost && (
-              <p className="text-sm text-sand-600">
-                Est. cost: ${selectedOrder.estimated_cost.toFixed(2)}
-              </p>
-            )}
-            <p className="text-xs text-sand-400">
-              Created: {new Date(selectedOrder.created_at).toLocaleDateString()}
-            </p>
+
+            {/* Title */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-sand-700">Title</label>
+              <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} required />
+            </div>
+
+            {/* Description */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-sand-700">Description</label>
+              <textarea
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                className="w-full rounded-lg border border-sand-300 px-3 py-2 text-sm text-sand-900 placeholder:text-sand-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                rows={3}
+              />
+            </div>
+
+            {/* Assigned To */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-sand-700">Assigned To</label>
+              <select
+                value={editAssignedTo}
+                onChange={(e) => setEditAssignedTo(e.target.value)}
+                className="w-full rounded-lg border border-sand-300 bg-white px-3 py-2 text-sm text-sand-900 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+              >
+                <option value="">Unassigned</option>
+                {orgMembers.map((m) => (
+                  <option key={m.user_id} value={m.user_id}>
+                    {m.full_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Scheduled Date */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-sand-700">Scheduled Date</label>
+              <Input
+                type="date"
+                value={editScheduledDate}
+                onChange={(e) => setEditScheduledDate(e.target.value)}
+              />
+            </div>
+
+            {/* Urgency + Status */}
+            <div className="grid grid-cols-2 gap-4">
+              <Select
+                name="urgency"
+                label="Priority"
+                value={editUrgency}
+                onChange={(e) => setEditUrgency(e.target.value)}
+                options={URGENCY_OPTIONS}
+              />
+              <Select
+                name="status"
+                label="Status"
+                value={editStatus}
+                onChange={(e) => setEditStatus(e.target.value)}
+                options={STATUS_OPTIONS}
+              />
+            </div>
+
+            {/* Costs */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-sand-700">Estimated Cost</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editEstimatedCost}
+                  onChange={(e) => setEditEstimatedCost(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-sand-700">Actual Cost</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editActualCost}
+                  onChange={(e) => setEditActualCost(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3 border-t border-sand-100 pt-4">
+              <Button variant="secondary" onClick={() => setSelectedOrder(null)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSave} disabled={saving || !editTitle.trim()}>
+                {saving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
+              </Button>
+            </div>
           </div>
         </Modal>
       )}
