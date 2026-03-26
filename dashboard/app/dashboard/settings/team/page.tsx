@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { Skeleton } from '@/components/ui/skeleton'
-import { UserPlus, Mail, Shield, Trash2 } from 'lucide-react'
+import { UserPlus, Mail, Shield, Trash2, Loader2, CheckCircle, Copy, Eye, EyeOff } from 'lucide-react'
 import type { OrgMember, OrgInvite, User, UserRole } from '@/lib/types'
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -32,7 +32,7 @@ export default function TeamPage() {
   const [members, setMembers] = useState<(OrgMember & { user: User })[]>([])
   const [invites, setInvites] = useState<OrgInvite[]>([])
   const [loading, setLoading] = useState(true)
-  const [showInviteModal, setShowInviteModal] = useState(false)
+  const [showAddModal, setShowAddModal] = useState(false)
 
   useEffect(() => {
     fetchTeam()
@@ -106,9 +106,9 @@ export default function TeamPage() {
             {members.length} members &middot; {invites.length} pending invites
           </p>
         </div>
-        <Button onClick={() => setShowInviteModal(true)}>
+        <Button onClick={() => setShowAddModal(true)}>
           <UserPlus className="h-4 w-4" />
-          Invite Member
+          Add Member
         </Button>
       </div>
 
@@ -121,7 +121,7 @@ export default function TeamPage() {
               className="flex items-center justify-between rounded-lg border border-sand-100 p-3"
             >
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-50 text-sm font-bold text-indigo-600">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-teal-50 text-sm font-bold text-teal-600">
                   {member.user?.full_name?.charAt(0) ?? '?'}
                 </div>
                 <div>
@@ -195,24 +195,24 @@ export default function TeamPage() {
       )}
 
       <Modal
-        open={showInviteModal}
-        onClose={() => setShowInviteModal(false)}
-        title="Invite Team Member"
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        title="Add Team Member"
         className="max-w-md"
       >
-        <InviteForm
+        <AddMemberForm
           onSuccess={() => {
-            setShowInviteModal(false)
+            setShowAddModal(false)
             fetchTeam()
           }}
-          onCancel={() => setShowInviteModal(false)}
+          onCancel={() => setShowAddModal(false)}
         />
       </Modal>
     </div>
   )
 }
 
-function InviteForm({
+function AddMemberForm({
   onSuccess,
   onCancel,
 }: {
@@ -220,37 +220,104 @@ function InviteForm({
   onCancel: () => void
 }) {
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [result, setResult] = useState<{ message: string; tempPassword: string } | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setSaving(true)
+    setError(null)
 
     const form = new FormData(e.currentTarget)
-    const supabase = createClient()
+    const tempPassword = form.get('temp_password') as string || generatePassword()
 
-    const { data: { user } } = await supabase.auth.getUser()
-
-    const { error } = await supabase.from('org_invites').insert({
-      email: form.get('email') as string,
-      role: form.get('role') as UserRole,
-      invited_by: user!.id,
+    const res = await fetch('/api/team/create-member', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: form.get('email') as string,
+        full_name: form.get('full_name') as string,
+        role: form.get('role') as string,
+        temp_password: tempPassword,
+      }),
     })
 
+    const data = await res.json()
     setSaving(false)
-    if (!error) onSuccess()
+
+    if (!res.ok) {
+      setError(data.error || 'Something went wrong')
+    } else {
+      setResult({ message: data.message, tempPassword: tempPassword })
+    }
+  }
+
+  function handleCopy() {
+    if (!result) return
+    navigator.clipboard.writeText(result.tempPassword)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  if (result) {
+    return (
+      <div className="space-y-4">
+        <div className="rounded-lg bg-emerald-50 p-4">
+          <div className="flex items-center gap-2 text-emerald-700">
+            <CheckCircle className="h-5 w-5" />
+            <p className="font-medium">{result.message}</p>
+          </div>
+        </div>
+        <div className="rounded-lg border border-sand-200 p-4">
+          <p className="mb-2 text-sm font-medium text-sand-700">Temporary Password</p>
+          <p className="mb-1 text-xs text-sand-500">Share this with the team member so they can log in.</p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 rounded bg-sand-50 px-3 py-2 font-mono text-sm text-sand-900">
+              {showPassword ? result.tempPassword : '••••••••••••'}
+            </code>
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="rounded-md p-2 text-sand-400 hover:bg-sand-50 hover:text-sand-600"
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="rounded-md p-2 text-sand-400 hover:bg-sand-50 hover:text-sand-600"
+            >
+              {copied ? <CheckCircle className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+            </button>
+          </div>
+        </div>
+        <div className="flex justify-end">
+          <Button onClick={onSuccess}>Done</Button>
+        </div>
+      </div>
+    )
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {error && (
+        <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>
+      )}
+      <div>
+        <label className="mb-1 block text-sm font-medium text-sand-700">Full Name *</label>
+        <Input name="full_name" required placeholder="John Smith" />
+      </div>
       <div>
         <label className="mb-1 block text-sm font-medium text-sand-700">Email *</label>
-        <Input name="email" type="email" required placeholder="team@company.com" />
+        <Input name="email" type="email" required placeholder="john@company.com" />
       </div>
       <div>
         <label className="mb-1 block text-sm font-medium text-sand-700">Role *</label>
         <select
           name="role"
-          className="w-full rounded-lg border border-sand-300 px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-sand-300 bg-white px-3 py-2 text-sm text-sand-900 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
           defaultValue="technician"
         >
           <option value="admin">Admin</option>
@@ -259,12 +326,30 @@ function InviteForm({
           <option value="viewer">Viewer</option>
         </select>
       </div>
+      <div>
+        <label className="mb-1 block text-sm font-medium text-sand-700">Temporary Password</label>
+        <Input name="temp_password" placeholder="Leave blank to auto-generate" />
+        <p className="mt-1 text-xs text-sand-400">They can change it after first login.</p>
+      </div>
       <div className="flex justify-end gap-3">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
         <Button type="submit" disabled={saving}>
-          {saving ? 'Sending...' : 'Send Invite'}
+          {saving ? (
+            <><Loader2 className="h-4 w-4 animate-spin" /> Creating...</>
+          ) : (
+            'Add Member'
+          )}
         </Button>
       </div>
     </form>
   )
+}
+
+function generatePassword(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$'
+  let pw = ''
+  for (let i = 0; i < 12; i++) {
+    pw += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return pw
 }

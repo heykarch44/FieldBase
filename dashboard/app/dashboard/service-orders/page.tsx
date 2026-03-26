@@ -229,10 +229,9 @@ export default function ServiceOrdersPage() {
     if (!userData?.active_org_id) return
 
     const { data: members } = await supabase
-      .from('memberships')
-      .select('user_id, user:users!memberships_user_id_fkey(full_name)')
+      .from('org_members')
+      .select('user_id, user:users!org_members_user_id_fkey(full_name)')
       .eq('org_id', userData.active_org_id)
-      .eq('status', 'active')
 
     if (members) {
       setOrgMembers(
