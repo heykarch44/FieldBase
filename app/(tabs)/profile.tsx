@@ -20,6 +20,7 @@ import Constants from "expo-constants";
 export default function ProfileScreen() {
   const {
     user,
+    memberships,
     signOut,
     biometricEnabled,
     biometricAvailable,
@@ -75,7 +76,7 @@ export default function ProfileScreen() {
           )}
           <View style={styles.roleBadge}>
             <Text style={styles.roleText}>
-              {user?.org_role ?? "—"}
+              {memberships?.[0]?.role ?? "—"}
             </Text>
           </View>
         </View>

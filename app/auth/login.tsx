@@ -16,7 +16,7 @@ import { useAuth } from "../../src/providers/AuthProvider";
 import { Button } from "../../src/components/Button";
 
 export default function LoginScreen() {
-  const { signIn, session, user, loading, biometricEnabled, authenticateWithBiometrics } = useAuth();
+  const { signIn, session, user, memberships, loading, biometricEnabled, authenticateWithBiometrics } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,11 +25,12 @@ export default function LoginScreen() {
 
   useEffect(() => {
     if (!loading && session && user) {
-      if (user.org_role === "technician" || user.org_role === "admin" || user.org_role === "owner") {
+      // Role lives in org_members, not on the user record
+      if (memberships.length > 0) {
         router.replace("/(tabs)");
       }
     }
-  }, [loading, session, user, router]);
+  }, [loading, session, user, memberships, router]);
 
   useEffect(() => {
     if (session && biometricEnabled) {
@@ -39,7 +40,7 @@ export default function LoginScreen() {
 
   const handleBiometricLogin = async () => {
     const success = await authenticateWithBiometrics();
-    if (success && user && (user.org_role === "technician" || user.org_role === "admin" || user.org_role === "owner")) {
+    if (success && user && memberships.length > 0) {
       router.replace("/(tabs)");
     }
   };
