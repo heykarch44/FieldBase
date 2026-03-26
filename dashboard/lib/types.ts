@@ -154,6 +154,15 @@ export interface Visit {
   technician?: User;
 }
 
+export interface ServiceOrderAssignee {
+  id: string;
+  service_order_id: string;
+  user_id: string;
+  org_id: string;
+  assigned_at: string;
+  user?: User;
+}
+
 export interface ServiceOrder {
   id: string;
   org_id: string;
@@ -175,6 +184,7 @@ export interface ServiceOrder {
   jobsite?: Jobsite;
   assignee?: User;
   requester?: User;
+  assignees?: ServiceOrderAssignee[];
 }
 
 export interface Photo {
