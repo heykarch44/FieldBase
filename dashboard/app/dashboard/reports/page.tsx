@@ -175,7 +175,7 @@ export default function ReportsPage() {
           <p className="text-3xl font-bold text-primary-600">{totalOrders}</p>
         </Card>
         <Card className="p-5 text-center">
-          <p className="text-sm text-sand-500">Active Jobsites</p>
+          <p className="text-sm text-sand-500">Active Sites</p>
           <p className="text-3xl font-bold text-sand-900">{totalJobsites}</p>
         </Card>
       </div>

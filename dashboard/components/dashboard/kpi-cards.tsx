@@ -69,7 +69,7 @@ export function KpiCards() {
 
   const kpis = [
     {
-      label: 'Active Jobsites',
+      label: 'Active Sites',
       value: data.activeJobsites.toString(),
       icon: Building2,
       color: 'text-indigo-600 bg-indigo-50',

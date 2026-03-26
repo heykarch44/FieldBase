@@ -22,7 +22,7 @@ export default function DashboardPage() {
         <Link href="/dashboard/jobsites">
           <Button variant="secondary" size="sm">
             <Building2 className="h-4 w-4" />
-            Add Jobsite
+            Add Site
           </Button>
         </Link>
         <Link href="/dashboard/service-orders">
