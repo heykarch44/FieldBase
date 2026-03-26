@@ -10,8 +10,13 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Modal } from '@/components/ui/modal'
 import {
   DndContext,
-  closestCenter,
+  closestCorners,
   DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+  useDraggable,
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core'
@@ -33,11 +38,118 @@ const urgencyColor: Record<UrgencyLevel, string> = {
   emergency: 'bg-red-50 text-red-700',
 }
 
+// ---------------------------------------------------------------------------
+// Droppable Column wrapper
+// ---------------------------------------------------------------------------
+
+function DroppableColumn({
+  id,
+  label,
+  count,
+  children,
+}: {
+  id: string
+  label: string
+  count: number
+  children: React.ReactNode
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id })
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`min-h-[400px] rounded-xl border p-3 transition-colors ${
+        isOver
+          ? 'border-teal-400 bg-teal-50/60'
+          : 'border-sand-200 bg-sand-50/50'
+      }`}
+    >
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-sand-700">{label}</h3>
+        <span className="rounded-full bg-sand-200 px-2 py-0.5 text-xs font-medium text-sand-600">
+          {count}
+        </span>
+      </div>
+      <div className="space-y-2">{children}</div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Draggable Card wrapper
+// ---------------------------------------------------------------------------
+
+function DraggableCard({
+  order,
+  onSelect,
+}: {
+  order: ServiceOrder
+  onSelect: (o: ServiceOrder) => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({ id: order.id })
+
+  const style: React.CSSProperties = {
+    transform: transform
+      ? `translate(${transform.x}px, ${transform.y}px)`
+      : undefined,
+    opacity: isDragging ? 0.4 : 1,
+    touchAction: 'none',
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...listeners}
+      {...attributes}
+      onClick={() => {
+        if (!isDragging) onSelect(order)
+      }}
+      className="cursor-grab rounded-lg border border-sand-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing"
+    >
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-sm font-semibold text-sand-900 line-clamp-1">
+          {order.title}
+        </span>
+      </div>
+      <span
+        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+          urgencyColor[order.urgency]
+        }`}
+      >
+        {order.urgency}
+      </span>
+      {(order as unknown as { jobsite?: { name: string } }).jobsite?.name ? (
+        <p className="mt-1 text-xs text-sand-500">
+          {(order as unknown as { jobsite: { name: string } }).jobsite.name}
+        </p>
+      ) : null}
+      {order.description && (
+        <p className="mt-1 text-xs text-sand-400 line-clamp-2">
+          {order.description}
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Main Page
+// ---------------------------------------------------------------------------
+
 export default function ServiceOrdersPage() {
   const [orders, setOrders] = useState<ServiceOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [activeOrder, setActiveOrder] = useState<ServiceOrder | null>(null)
   const [selectedOrder, setSelectedOrder] = useState<ServiceOrder | null>(null)
+
+  // PointerSensor with a small distance constraint so clicks don't trigger drag
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    })
+  )
 
   useEffect(() => {
     fetchOrders()
@@ -70,11 +182,27 @@ export default function ServiceOrdersPage() {
     if (!over) return
 
     const orderId = active.id as string
-    const newStatus = over.id as ServiceOrderStatus
+
+    // Determine the target column.
+    // `over` may be a column (droppable) or another card (draggable).
+    // If the user drops on a card, we need to look up what column that card is in.
+    const columnKeys = STATUS_COLUMNS.map((c) => c.key as string)
+    let newStatus: ServiceOrderStatus
+
+    if (columnKeys.includes(over.id as string)) {
+      // Dropped directly on a column
+      newStatus = over.id as ServiceOrderStatus
+    } else {
+      // Dropped on another card — find that card's status
+      const targetCard = orders.find((o) => o.id === over.id)
+      if (!targetCard) return
+      newStatus = targetCard.status
+    }
 
     const order = orders.find((o) => o.id === orderId)
     if (!order || order.status === newStatus) return
 
+    // Optimistic update
     setOrders((prev) =>
       prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
     )
@@ -109,7 +237,8 @@ export default function ServiceOrdersPage() {
       </div>
 
       <DndContext
-        collisionDetection={closestCenter}
+        sensors={sensors}
+        collisionDetection={closestCorners}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
@@ -117,59 +246,35 @@ export default function ServiceOrdersPage() {
           {STATUS_COLUMNS.map((col) => {
             const colOrders = orders.filter((o) => o.status === col.key)
             return (
-              <div
+              <DroppableColumn
                 key={col.key}
                 id={col.key}
-                className="min-h-[400px] rounded-xl border border-sand-200 bg-sand-50/50 p-3"
+                label={col.label}
+                count={colOrders.length}
               >
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-sand-700">{col.label}</h3>
-                  <span className="rounded-full bg-sand-200 px-2 py-0.5 text-xs font-medium text-sand-600">
-                    {colOrders.length}
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  {colOrders.map((order) => (
-                    <div
-                      key={order.id}
-                      id={order.id}
-                      onClick={() => setSelectedOrder(order)}
-                      className="cursor-pointer rounded-lg border border-sand-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md"
-                    >
-                      <div className="mb-2 flex items-center justify-between">
-                        <span className="text-sm font-semibold text-sand-900 line-clamp-1">
-                          {order.title}
-                        </span>
-                      </div>
-                      <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                          urgencyColor[order.urgency]
-                        }`}
-                      >
-                        {order.urgency}
-                      </span>
-                      {(order as Record<string, unknown>).jobsite && (
-                        <p className="mt-1 text-xs text-sand-500">
-                          {((order as Record<string, unknown>).jobsite as { name: string })?.name}
-                        </p>
-                      )}
-                      {order.description && (
-                        <p className="mt-1 text-xs text-sand-400 line-clamp-2">
-                          {order.description}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
+                {colOrders.map((order) => (
+                  <DraggableCard
+                    key={order.id}
+                    order={order}
+                    onSelect={setSelectedOrder}
+                  />
+                ))}
+              </DroppableColumn>
             )
           })}
         </div>
 
-        <DragOverlay>
+        <DragOverlay dropAnimation={null}>
           {activeOrder && (
-            <div className="rounded-lg border border-indigo-200 bg-white p-3 shadow-lg">
+            <div className="rounded-lg border border-teal-300 bg-white p-3 shadow-lg ring-2 ring-teal-200">
               <span className="text-sm font-semibold text-sand-900">{activeOrder.title}</span>
+              <span
+                className={`ml-2 inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                  urgencyColor[activeOrder.urgency]
+                }`}
+              >
+                {activeOrder.urgency}
+              </span>
             </div>
           )}
         </DragOverlay>

@@ -37,6 +37,7 @@ import {
   FileSpreadsheet,
   FileImage,
   Loader2,
+  Eye,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -735,11 +736,24 @@ function getFileIcon(mimeType: string | null) {
   return <File className="h-8 w-8 text-sand-400" />
 }
 
+function isImageMime(mime: string | null): boolean {
+  return !!mime && mime.startsWith('image/')
+}
+
+function isPdfMime(mime: string | null): boolean {
+  return mime === 'application/pdf'
+}
+
 function DocumentsTab({ orgId, siteId }: { orgId: string | null; siteId: string }) {
   const [documents, setDocuments] = useState<DocumentRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [showUploadModal, setShowUploadModal] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
+
+  // Document preview state
+  const [previewDoc, setPreviewDoc] = useState<DocumentRecord | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
 
   const fetchDocuments = useCallback(async () => {
     if (!siteId) return
@@ -769,6 +783,28 @@ function DocumentsTab({ orgId, siteId }: { orgId: string | null; siteId: string 
       return
     }
     window.open(data.signedUrl, '_blank')
+  }
+
+  async function handlePreview(doc: DocumentRecord) {
+    setPreviewDoc(doc)
+    setPreviewUrl(null)
+    setPreviewLoading(true)
+    const supabase = createClient()
+    const { data, error } = await supabase.storage
+      .from('fieldbase')
+      .createSignedUrl(doc.storage_url, 3600)
+    setPreviewLoading(false)
+    if (error || !data?.signedUrl) {
+      alert('Failed to generate preview link.')
+      setPreviewDoc(null)
+      return
+    }
+    setPreviewUrl(data.signedUrl)
+  }
+
+  function closePreview() {
+    setPreviewDoc(null)
+    setPreviewUrl(null)
   }
 
   async function handleDelete(doc: DocumentRecord) {
@@ -847,6 +883,17 @@ function DocumentsTab({ orgId, siteId }: { orgId: string | null; siteId: string 
                 </div>
               </div>
               <div className="mt-4 flex items-center gap-2 border-t border-sand-100 pt-3">
+                {(isImageMime(doc.mime_type) || isPdfMime(doc.mime_type)) && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => handlePreview(doc)}
+                    className="flex-1"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                    View
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="secondary"
@@ -890,6 +937,82 @@ function DocumentsTab({ orgId, siteId }: { orgId: string | null; siteId: string 
           }}
           onCancel={() => setShowUploadModal(false)}
         />
+      </Modal>
+
+      {/* Document Preview Modal */}
+      <Modal
+        open={!!previewDoc}
+        onClose={closePreview}
+        title={previewDoc?.name ?? 'Document Preview'}
+        className="max-w-4xl"
+      >
+        {previewLoading && (
+          <div className="flex flex-col items-center justify-center py-16">
+            <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
+            <p className="mt-3 text-sm text-sand-500">Loading preview...</p>
+          </div>
+        )}
+
+        {!previewLoading && previewDoc && previewUrl && (
+          <div className="space-y-4">
+            {/* Image preview */}
+            {isImageMime(previewDoc.mime_type) && (
+              <div className="flex items-center justify-center rounded-lg bg-sand-50 p-4">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={previewUrl}
+                  alt={previewDoc.name}
+                  className="max-h-[70vh] max-w-full rounded-lg object-contain"
+                />
+              </div>
+            )}
+
+            {/* PDF preview */}
+            {isPdfMime(previewDoc.mime_type) && (
+              <iframe
+                src={previewUrl}
+                title={previewDoc.name}
+                className="h-[70vh] w-full rounded-lg border border-sand-200"
+              />
+            )}
+
+            {/* Fallback for other types */}
+            {!isImageMime(previewDoc.mime_type) &&
+              !isPdfMime(previewDoc.mime_type) && (
+                <div className="flex flex-col items-center py-12 text-center">
+                  {getFileIcon(previewDoc.mime_type)}
+                  <p className="mt-3 font-medium text-sand-700">
+                    {previewDoc.name}
+                  </p>
+                  <p className="mt-1 text-sm text-sand-500">
+                    {previewDoc.mime_type ?? 'Unknown type'} &middot;{' '}
+                    {formatFileSize(previewDoc.file_size_bytes)}
+                  </p>
+                  <p className="mt-2 text-xs text-sand-400">
+                    Preview is not available for this file type.
+                  </p>
+                </div>
+              )}
+
+            {/* Action row */}
+            <div className="flex items-center justify-between border-t border-sand-100 pt-3">
+              <div className="text-xs text-sand-500">
+                {previewDoc.mime_type ?? 'Unknown type'} &middot;{' '}
+                {formatFileSize(previewDoc.file_size_bytes)}
+                {previewDoc.uploader?.full_name &&
+                  ` · Uploaded by ${previewDoc.uploader.full_name}`}
+              </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => handleDownload(previewDoc)}
+              >
+                <Download className="h-3.5 w-3.5" />
+                Download
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   )
