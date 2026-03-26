@@ -4,7 +4,7 @@ import { useRouter } from "expo-router";
 import { useAuth } from "../src/providers/AuthProvider";
 
 export default function Index() {
-  const { session, user, loading } = useAuth();
+  const { session, user, memberships, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -15,12 +15,12 @@ export default function Index() {
       return;
     }
 
-    if (user && (user.role === "technician" || user.role === "admin")) {
+    if (user && memberships.length > 0) {
       router.replace("/(tabs)");
     } else {
       router.replace("/auth/login");
     }
-  }, [loading, session, user, router]);
+  }, [loading, session, user, memberships, router]);
 
   return (
     <View style={styles.container}>
@@ -34,6 +34,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#0891b2",
+    backgroundColor: "#0d9488",
   },
 });

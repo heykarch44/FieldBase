@@ -10,6 +10,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../lib/supabase";
 import { useOrg } from "../providers/OrgProvider";
 import type { EntityType } from "../types/database";
+import { Colors } from "../constants/theme";
 
 interface SignaturePadProps {
   entityType: EntityType;
@@ -167,7 +168,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    backgroundColor: "#6366F1",
+    backgroundColor: Colors.primary[600],
     paddingVertical: 12,
     borderRadius: 10,
   },

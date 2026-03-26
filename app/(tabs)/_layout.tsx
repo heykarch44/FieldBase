@@ -5,8 +5,11 @@ import { Colors } from "../../src/constants/theme";
 import { SyncIndicator } from "../../src/components/SyncIndicator";
 import { View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useOrg } from "../../src/providers/OrgProvider";
 
 export default function TabLayout() {
+  const { routesEnabled } = useOrg();
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: Colors.primary[600] }} edges={["top"]}>
       <SyncIndicator />
@@ -37,11 +40,15 @@ export default function TabLayout() {
         <Tabs.Screen
           name="index"
           options={{
-            title: "Route",
+            title: routesEnabled ? "Route" : "Schedule",
             tabBarIcon: ({ color, size }) => (
-              <Ionicons name="map" size={size} color={color} />
+              <Ionicons
+                name={routesEnabled ? "map" : "calendar"}
+                size={size}
+                color={color}
+              />
             ),
-            headerTitle: "Today's Route",
+            headerTitle: routesEnabled ? "Today's Route" : "My Schedule",
           }}
         />
         <Tabs.Screen

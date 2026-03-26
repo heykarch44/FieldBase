@@ -14,6 +14,7 @@ import { supabase } from "../lib/supabase";
 import { useOrg } from "../providers/OrgProvider";
 import { enqueueAction } from "../lib/offline-db";
 import type { FieldDefinition, FieldValue, EntityType } from "../types/database";
+import { Colors } from "../constants/theme";
 
 interface DynamicFormProps {
   entityType: EntityType;
@@ -213,7 +214,7 @@ export function DynamicForm({
               value={val === "true"}
               onValueChange={(v) => updateValue(field.id, v ? "true" : "false")}
               disabled={readOnly}
-              trackColor={{ false: "#D1D5DB", true: "#6366F1" }}
+              trackColor={{ false: "#D1D5DB", true: Colors.primary[600] }}
             />
           </View>
         );
@@ -408,8 +409,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   enumOptionSelected: {
-    backgroundColor: "#6366F1",
-    borderColor: "#6366F1",
+    backgroundColor: Colors.primary[600],
+    borderColor: Colors.primary[600],
   },
   enumOptionText: { fontSize: 13, color: "#374151" },
   enumOptionTextSelected: { color: "#FFFFFF", fontWeight: "600" },
@@ -433,7 +434,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: "#6366F1",
+    backgroundColor: Colors.primary[600],
     paddingVertical: 14,
     borderRadius: 10,
     marginTop: 16,

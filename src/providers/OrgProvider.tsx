@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "./AuthProvider";
 import type { Organization, OrgMember, FieldDefinition, EntityType } from "../types/database";
@@ -9,6 +9,8 @@ interface OrgContextType {
   members: OrgMember[];
   fieldDefinitions: FieldDefinition[];
   loading: boolean;
+  routesEnabled: boolean;
+  orgSettings: Record<string, unknown>;
   switchOrg: (orgId: string) => Promise<void>;
   getFieldsForEntity: (entityType: EntityType) => FieldDefinition[];
   refreshFieldDefinitions: () => Promise<void>;
@@ -24,6 +26,16 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const orgId = user?.active_org_id ?? null;
+
+  const routesEnabled = useMemo(
+    () => (org?.settings as Record<string, unknown>)?.routes_enabled !== false,
+    [org?.settings]
+  );
+
+  const orgSettings = useMemo(
+    () => (org?.settings as Record<string, unknown>) ?? {},
+    [org?.settings]
+  );
 
   const fetchOrgData = useCallback(async (activeOrgId: string) => {
     const [orgRes, membersRes, fieldsRes] = await Promise.all([
@@ -91,6 +103,8 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
         members,
         fieldDefinitions,
         loading,
+        routesEnabled,
+        orgSettings,
         switchOrg,
         getFieldsForEntity,
         refreshFieldDefinitions,

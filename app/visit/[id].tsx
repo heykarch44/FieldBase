@@ -434,7 +434,7 @@ export default function VisitScreen() {
                 name={step.icon as never}
                 size={16}
                 color={
-                  currentStep === step.key ? "#6366F1" : "#9CA3AF"
+                  currentStep === step.key ? Colors.primary[600] : "#9CA3AF"
                 }
               />
               <Text
@@ -504,11 +504,11 @@ export default function VisitScreen() {
               <Text style={styles.stepTitle}>Photos</Text>
               <View style={styles.photoActions}>
                 <TouchableOpacity style={styles.photoButton} onPress={takePhoto}>
-                  <Ionicons name="camera" size={24} color="#6366F1" />
+                  <Ionicons name="camera" size={24} color={Colors.primary[600]} />
                   <Text style={styles.photoButtonText}>Take Photo</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.photoButton} onPress={pickFromGallery}>
-                  <Ionicons name="images" size={24} color="#6366F1" />
+                  <Ionicons name="images" size={24} color={Colors.primary[600]} />
                   <Text style={styles.photoButtonText}>Gallery</Text>
                 </TouchableOpacity>
               </View>
@@ -684,7 +684,7 @@ const styles = StyleSheet.create({
   headerCenter: { flex: 1 },
   headerTitle: { fontSize: 17, fontWeight: "700", color: "#111827" },
   headerMeta: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 },
-  timerText: { fontSize: 13, fontWeight: "600", color: "#6366F1" },
+  timerText: { fontSize: 13, fontWeight: "600", color: Colors.primary[600] },
   stepTabBar: {
     backgroundColor: "#ffffff",
     borderBottomWidth: 1,
@@ -700,9 +700,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: "#f3f4f6",
   },
-  stepTabActive: { backgroundColor: "#EEF2FF" },
+  stepTabActive: { backgroundColor: Colors.primary[50] },
   stepTabText: { fontSize: 13, color: "#9CA3AF", fontWeight: "500" },
-  stepTabTextActive: { color: "#6366F1", fontWeight: "600" },
+  stepTabTextActive: { color: Colors.primary[600], fontWeight: "600" },
   content: { flex: 1 },
   contentInner: { padding: 16, paddingBottom: 100 },
   stepCard: { marginBottom: 16 },
@@ -739,7 +739,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderStyle: "dashed",
   },
-  photoButtonText: { fontSize: 13, color: "#6366F1", fontWeight: "600" },
+  photoButtonText: { fontSize: 13, color: Colors.primary[600], fontWeight: "600" },
   photoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   photoThumb: { width: 80, height: 80, borderRadius: 8 },
   emptyText: { fontSize: 14, color: "#9CA3AF", fontStyle: "italic" },
@@ -774,7 +774,7 @@ const styles = StyleSheet.create({
     borderColor: "#D1D5DB",
     alignItems: "center",
   },
-  urgencyChipActive: { backgroundColor: "#6366F1", borderColor: "#6366F1" },
+  urgencyChipActive: { backgroundColor: Colors.primary[600], borderColor: Colors.primary[600] },
   urgencyChipText: { fontSize: 12, color: "#6B7280", textTransform: "capitalize" },
   urgencyChipTextActive: { color: "#FFFFFF", fontWeight: "600" },
   formActions: { flexDirection: "row", gap: 8 },
