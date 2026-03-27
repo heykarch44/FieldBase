@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Badge } from '@/components/ui/badge'
@@ -38,6 +38,10 @@ import {
   FileImage,
   Loader2,
   Eye,
+  X,
+  Check,
+  ChevronDown,
+  Pencil,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -50,6 +54,16 @@ interface Tab {
   key: TabKey
   label: string
   icon: React.ReactNode
+}
+
+interface SiteOrgMember {
+  user_id: string
+  full_name: string
+}
+
+interface SiteAssigneeInfo {
+  user_id: string
+  full_name: string
 }
 
 const TABS: Tab[] = [
@@ -109,6 +123,21 @@ export default function SiteDetailPage() {
   const [showAddOrder, setShowAddOrder] = useState(false)
   const [activeOrgId, setActiveOrgId] = useState<string | null>(null)
 
+  // Edit service order state
+  const [editOrder, setEditOrder] = useState<ServiceOrder | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [editAssignedIds, setEditAssignedIds] = useState<string[]>([])
+  const [editScheduledDate, setEditScheduledDate] = useState('')
+  const [editUrgency, setEditUrgency] = useState('medium')
+  const [editStatus, setEditStatus] = useState('pending')
+  const [editEstimatedCost, setEditEstimatedCost] = useState('')
+  const [editActualCost, setEditActualCost] = useState('')
+  const [siteOrgMembers, setSiteOrgMembers] = useState<SiteOrgMember[]>([])
+  const [assigneesMap, setAssigneesMap] = useState<Record<string, SiteAssigneeInfo[]>>({})
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+
   const fetchData = useCallback(async () => {
     if (!id) return
     setLoading(true)
@@ -156,15 +185,127 @@ export default function SiteDetailPage() {
     }
 
     setSite(siteRes.data as Jobsite)
-    setServiceOrders((ordersRes.data ?? []) as ServiceOrder[])
+    const fetchedOrders = (ordersRes.data ?? []) as ServiceOrder[]
+    setServiceOrders(fetchedOrders)
     setVisits((visitsRes.data ?? []) as Visit[])
     setEquipment((equipmentRes.data ?? []) as Equipment[])
+
+    // Fetch assignees for these orders
+    if (fetchedOrders.length > 0) {
+      const orderIds = fetchedOrders.map((o) => o.id)
+      const { data: assigneesData } = await supabase
+        .from('service_order_assignees')
+        .select('service_order_id, user_id, user:users!service_order_assignees_user_id_fkey(full_name)')
+        .in('service_order_id', orderIds)
+
+      const map: Record<string, SiteAssigneeInfo[]> = {}
+      if (assigneesData) {
+        for (const row of assigneesData as { service_order_id: string; user_id: string; user: { full_name: string } | null }[]) {
+          if (!map[row.service_order_id]) map[row.service_order_id] = []
+          map[row.service_order_id].push({
+            user_id: row.user_id,
+            full_name: (row.user as { full_name: string } | null)?.full_name ?? 'Unknown',
+          })
+        }
+      }
+      setAssigneesMap(map)
+    } else {
+      setAssigneesMap({})
+    }
+
     setLoading(false)
   }, [id])
 
   useEffect(() => {
     fetchData()
   }, [fetchData])
+
+  async function fetchSiteOrgMembers() {
+    if (!activeOrgId) return
+    const supabase = createClient()
+    const { data: members } = await supabase
+      .from('org_members')
+      .select('user_id, user:users!org_members_user_id_fkey(full_name)')
+      .eq('org_id', activeOrgId)
+    if (members) {
+      setSiteOrgMembers(
+        members.map((m: { user_id: string; user: { full_name: string } | null }) => ({
+          user_id: m.user_id,
+          full_name: (m.user as { full_name: string } | null)?.full_name ?? 'Unknown',
+        }))
+      )
+    }
+  }
+
+  function openEditOrder(order: ServiceOrder) {
+    setEditOrder(order)
+    setEditTitle(order.title)
+    setEditDescription(order.description ?? '')
+    setEditScheduledDate(order.scheduled_date ?? '')
+    setEditUrgency(order.urgency)
+    setEditStatus(order.status)
+    setEditEstimatedCost(order.estimated_cost != null ? String(order.estimated_cost) : '')
+    setEditActualCost(order.actual_cost != null ? String(order.actual_cost) : '')
+    setEditError(null)
+    const currentAssignees = assigneesMap[order.id] ?? []
+    setEditAssignedIds(currentAssignees.map((a) => a.user_id))
+    fetchSiteOrgMembers()
+  }
+
+  async function handleSaveOrder() {
+    if (!editOrder) return
+    setEditSaving(true)
+    setEditError(null)
+    const supabase = createClient()
+
+    const { error } = await supabase
+      .from('service_orders')
+      .update({
+        title: editTitle,
+        description: editDescription || null,
+        assigned_to: editAssignedIds.length > 0 ? editAssignedIds[0] : null,
+        scheduled_date: editScheduledDate || null,
+        urgency: editUrgency,
+        status: editStatus,
+        estimated_cost: editEstimatedCost ? parseFloat(editEstimatedCost) : null,
+        actual_cost: editActualCost ? parseFloat(editActualCost) : null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', editOrder.id)
+
+    if (error) {
+      setEditSaving(false)
+      setEditError(error.message)
+      return
+    }
+
+    // Sync assignees in junction table
+    await supabase
+      .from('service_order_assignees')
+      .delete()
+      .eq('service_order_id', editOrder.id)
+
+    if (editAssignedIds.length > 0) {
+      const rows = editAssignedIds.map((uid) => ({
+        service_order_id: editOrder.id,
+        user_id: uid,
+        org_id: editOrder.org_id,
+      }))
+      const { error: insertError } = await supabase
+        .from('service_order_assignees')
+        .insert(rows)
+
+      if (insertError) {
+        setEditSaving(false)
+        setEditError(insertError.message)
+        return
+      }
+    }
+
+    setEditSaving(false)
+    setEditOrder(null)
+    fetchData()
+  }
 
   // ---------- Loading state ----------
   if (loading) {
@@ -294,7 +435,9 @@ export default function SiteDetailPage() {
       {activeTab === 'service_orders' && (
         <ServiceOrdersTab
           serviceOrders={serviceOrders}
+          assigneesMap={assigneesMap}
           onAdd={() => setShowAddOrder(true)}
+          onEdit={openEditOrder}
         />
       )}
       {activeTab === 'visits' && <VisitsTab visits={visits} />}
@@ -318,6 +461,93 @@ export default function SiteDetailPage() {
           onCancel={() => setShowAddOrder(false)}
         />
       </Modal>
+
+      {/* Edit Service Order Modal */}
+      {editOrder && (
+        <Modal
+          open={!!editOrder}
+          onClose={() => setEditOrder(null)}
+          title="Edit Service Order"
+          className="max-w-xl"
+        >
+          <div className="space-y-4">
+            {editError && (
+              <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{editError}</div>
+            )}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-sand-700">Title</label>
+              <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} required />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-sand-700">Description</label>
+              <textarea
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                className="w-full rounded-lg border border-sand-300 px-3 py-2 text-sm text-sand-900 placeholder:text-sand-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                rows={3}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-sand-700">Assigned Techs</label>
+              <SiteTechMultiSelect
+                members={siteOrgMembers}
+                selected={editAssignedIds}
+                onChange={setEditAssignedIds}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-sand-700">Scheduled Date</label>
+              <Input type="date" value={editScheduledDate} onChange={(e) => setEditScheduledDate(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Select
+                name="edit_urgency"
+                label="Priority"
+                value={editUrgency}
+                onChange={(e) => setEditUrgency(e.target.value)}
+                options={[
+                  { value: 'low', label: 'Low' },
+                  { value: 'medium', label: 'Medium' },
+                  { value: 'high', label: 'High' },
+                  { value: 'emergency', label: 'Emergency' },
+                ]}
+              />
+              <Select
+                name="edit_status"
+                label="Status"
+                value={editStatus}
+                onChange={(e) => setEditStatus(e.target.value)}
+                options={[
+                  { value: 'draft', label: 'Draft' },
+                  { value: 'pending', label: 'Pending' },
+                  { value: 'approved', label: 'Approved' },
+                  { value: 'scheduled', label: 'Scheduled' },
+                  { value: 'in_progress', label: 'In Progress' },
+                  { value: 'completed', label: 'Completed' },
+                  { value: 'invoiced', label: 'Invoiced' },
+                  { value: 'canceled', label: 'Canceled' },
+                ]}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-sand-700">Estimated Cost</label>
+                <Input type="number" step="0.01" min="0" value={editEstimatedCost} onChange={(e) => setEditEstimatedCost(e.target.value)} placeholder="0.00" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-sand-700">Actual Cost</label>
+                <Input type="number" step="0.01" min="0" value={editActualCost} onChange={(e) => setEditActualCost(e.target.value)} placeholder="0.00" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-sand-100 pt-4">
+              <Button variant="secondary" onClick={() => setEditOrder(null)}>Cancel</Button>
+              <Button onClick={handleSaveOrder} disabled={editSaving || !editTitle.trim()}>
+                {editSaving ? (<><Loader2 className="h-4 w-4 animate-spin" /> Saving...</>) : 'Save Changes'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }
@@ -493,15 +723,124 @@ function OverviewTab({
 }
 
 // ---------------------------------------------------------------------------
+// Multi-select tech picker for site page
+// ---------------------------------------------------------------------------
+
+function SiteTechMultiSelect({
+  members,
+  selected,
+  onChange,
+}: {
+  members: SiteOrgMember[]
+  selected: string[]
+  onChange: (ids: string[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  function toggle(userId: string) {
+    if (selected.includes(userId)) {
+      onChange(selected.filter((id) => id !== userId))
+    } else {
+      onChange([...selected, userId])
+    }
+  }
+
+  function remove(userId: string) {
+    onChange(selected.filter((id) => id !== userId))
+  }
+
+  const selectedMembers = members.filter((m) => selected.includes(m.user_id))
+
+  return (
+    <div ref={ref} className="relative">
+      <div
+        onClick={() => setOpen(!open)}
+        className="flex min-h-[38px] w-full cursor-pointer flex-wrap items-center gap-1.5 rounded-lg border border-sand-300 bg-white px-3 py-1.5 text-sm text-sand-900 focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-500"
+      >
+        {selectedMembers.length === 0 && (
+          <span className="text-sand-400">Select techs...</span>
+        )}
+        {selectedMembers.map((m) => (
+          <span
+            key={m.user_id}
+            className="inline-flex items-center gap-1 rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700"
+          >
+            {m.full_name}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                remove(m.user_id)
+              }}
+              className="ml-0.5 rounded-full p-0.5 hover:bg-teal-100"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+        <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-sand-400" />
+      </div>
+
+      {open && (
+        <div className="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-sand-200 bg-white py-1 shadow-lg">
+          {members.length === 0 && (
+            <p className="px-3 py-2 text-sm text-sand-400">No team members found</p>
+          )}
+          {members.map((m) => {
+            const isSelected = selected.includes(m.user_id)
+            return (
+              <button
+                key={m.user_id}
+                type="button"
+                onClick={() => toggle(m.user_id)}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-sand-50"
+              >
+                <span
+                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                    isSelected
+                      ? 'border-teal-600 bg-teal-600 text-white'
+                      : 'border-sand-300'
+                  }`}
+                >
+                  {isSelected && <Check className="h-3 w-3" />}
+                </span>
+                <span className={isSelected ? 'font-medium text-sand-900' : 'text-sand-700'}>
+                  {m.full_name}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Tab: Service Orders
 // ---------------------------------------------------------------------------
 
 function ServiceOrdersTab({
   serviceOrders,
+  assigneesMap,
   onAdd,
+  onEdit,
 }: {
   serviceOrders: ServiceOrder[]
+  assigneesMap: Record<string, SiteAssigneeInfo[]>
   onAdd: () => void
+  onEdit: (order: ServiceOrder) => void
 }) {
   return (
     <div className="space-y-4">
@@ -532,41 +871,62 @@ function ServiceOrdersTab({
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-sand-500">Scheduled</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-sand-500">Assigned</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-sand-500">Created</th>
+                <th className="w-10 px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
-              {serviceOrders.map((order) => (
-                <tr
-                  key={order.id}
-                  className="border-b border-sand-50 transition-colors hover:bg-sand-50/50"
-                >
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-sand-900">{order.title}</p>
-                    {order.description && (
-                      <p className="mt-0.5 text-xs text-sand-400 line-clamp-1">{order.description}</p>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge variant={urgencyBadgeVariant(order.urgency)}>
-                      {capitalizeFirst(order.urgency)}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge variant={statusBadgeVariant(order.status)}>
-                      {capitalizeFirst(order.status.replace(/_/g, ' '))}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-sand-600">
-                    {order.scheduled_date ? formatDate(order.scheduled_date) : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-sand-600">
-                    {(order as unknown as { assignee?: { full_name: string } }).assignee?.full_name ?? '—'}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-sand-400">
-                    {formatDate(order.created_at)}
-                  </td>
-                </tr>
-              ))}
+              {serviceOrders.map((order) => {
+                const orderAssignees = assigneesMap[order.id] ?? []
+                return (
+                  <tr
+                    key={order.id}
+                    onClick={() => onEdit(order)}
+                    className="cursor-pointer border-b border-sand-50 transition-colors hover:bg-sand-50/50"
+                  >
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-sand-900">{order.title}</p>
+                      {order.description && (
+                        <p className="mt-0.5 text-xs text-sand-400 line-clamp-1">{order.description}</p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge variant={urgencyBadgeVariant(order.urgency)}>
+                        {capitalizeFirst(order.urgency)}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge variant={statusBadgeVariant(order.status)}>
+                        {capitalizeFirst(order.status.replace(/_/g, ' '))}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-sand-600">
+                      {order.scheduled_date ? formatDate(order.scheduled_date) : '—'}
+                    </td>
+                    <td className="px-4 py-3">
+                      {orderAssignees.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {orderAssignees.map((a) => (
+                            <span
+                              key={a.user_id}
+                              className="inline-flex rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700"
+                            >
+                              {a.full_name}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-sand-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-sand-400">
+                      {formatDate(order.created_at)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Pencil className="h-4 w-4 text-sand-300" />
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
