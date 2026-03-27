@@ -52,6 +52,16 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
+          name="orders"
+          options={{
+            title: "Orders",
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="clipboard" size={size} color={color} />
+            ),
+            headerTitle: "Service Orders",
+          }}
+        />
+        <Tabs.Screen
           name="history"
           options={{
             title: "History",
