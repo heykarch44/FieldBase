@@ -1299,81 +1299,101 @@ function DocumentsTab({ orgId, siteId }: { orgId: string | null; siteId: string 
         />
       </Modal>
 
-      {/* Document Preview Modal */}
-      <Modal
-        open={!!previewDoc}
-        onClose={closePreview}
-        title={previewDoc?.name ?? 'Document Preview'}
-        className="max-w-7xl !max-h-[95vh]"
-      >
-        {previewLoading && (
-          <div className="flex flex-col items-center justify-center py-16">
-            <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
-            <p className="mt-3 text-sm text-sand-500">Loading preview...</p>
-          </div>
-        )}
-
-        {!previewLoading && previewDoc && previewUrl && (
-          <div className="space-y-4">
-            {/* Image preview */}
-            {isImageMime(previewDoc.mime_type) && (
-              <div className="flex items-center justify-center rounded-lg bg-sand-50 p-4">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={previewUrl}
-                  alt={previewDoc.name}
-                  className="max-h-[85vh] max-w-full rounded-lg object-contain"
-                />
+      {/* Document Preview — full-screen overlay (bypasses Modal max-h constraint) */}
+      {!!previewDoc && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) closePreview() }}
+        >
+          <div className="relative flex h-[95vh] w-full max-w-7xl flex-col rounded-xl bg-white shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-sand-100 px-6 py-4">
+              <h2 className="text-lg font-semibold text-sand-900 truncate pr-4">
+                {previewDoc.name ?? 'Document Preview'}
+              </h2>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => handleDownload(previewDoc)}
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download
+                </Button>
+                <button
+                  onClick={closePreview}
+                  className="rounded-lg p-1.5 text-sand-400 hover:bg-sand-100 hover:text-sand-600"
+                >
+                  <X className="h-5 w-5" />
+                </button>
               </div>
-            )}
+            </div>
 
-            {/* PDF preview */}
-            {isPdfMime(previewDoc.mime_type) && (
-              <iframe
-                src={previewUrl}
-                title={previewDoc.name}
-                className="h-[82vh] w-full rounded-lg border border-sand-200"
-              />
-            )}
-
-            {/* Fallback for other types */}
-            {!isImageMime(previewDoc.mime_type) &&
-              !isPdfMime(previewDoc.mime_type) && (
-                <div className="flex flex-col items-center py-12 text-center">
-                  {getFileIcon(previewDoc.mime_type)}
-                  <p className="mt-3 font-medium text-sand-700">
-                    {previewDoc.name}
-                  </p>
-                  <p className="mt-1 text-sm text-sand-500">
-                    {previewDoc.mime_type ?? 'Unknown type'} &middot;{' '}
-                    {formatFileSize(previewDoc.file_size_bytes)}
-                  </p>
-                  <p className="mt-2 text-xs text-sand-400">
-                    Preview is not available for this file type.
-                  </p>
+            {/* Body — fills remaining space */}
+            <div className="flex-1 overflow-hidden p-4">
+              {previewLoading && (
+                <div className="flex h-full flex-col items-center justify-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
+                  <p className="mt-3 text-sm text-sand-500">Loading preview...</p>
                 </div>
               )}
 
-            {/* Action row */}
-            <div className="flex items-center justify-between border-t border-sand-100 pt-3">
+              {!previewLoading && previewUrl && (
+                <>
+                  {/* Image preview */}
+                  {isImageMime(previewDoc.mime_type) && (
+                    <div className="flex h-full items-center justify-center rounded-lg bg-sand-50">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={previewUrl}
+                        alt={previewDoc.name}
+                        className="max-h-full max-w-full rounded-lg object-contain"
+                      />
+                    </div>
+                  )}
+
+                  {/* PDF preview */}
+                  {isPdfMime(previewDoc.mime_type) && (
+                    <iframe
+                      src={previewUrl}
+                      title={previewDoc.name}
+                      className="h-full w-full rounded-lg border border-sand-200"
+                    />
+                  )}
+
+                  {/* Fallback for other types */}
+                  {!isImageMime(previewDoc.mime_type) &&
+                    !isPdfMime(previewDoc.mime_type) && (
+                      <div className="flex h-full flex-col items-center justify-center text-center">
+                        {getFileIcon(previewDoc.mime_type)}
+                        <p className="mt-3 font-medium text-sand-700">
+                          {previewDoc.name}
+                        </p>
+                        <p className="mt-1 text-sm text-sand-500">
+                          {previewDoc.mime_type ?? 'Unknown type'} &middot;{' '}
+                          {formatFileSize(previewDoc.file_size_bytes)}
+                        </p>
+                        <p className="mt-2 text-xs text-sand-400">
+                          Preview is not available for this file type.
+                        </p>
+                      </div>
+                    )}
+                </>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="border-t border-sand-100 px-6 py-3">
               <div className="text-xs text-sand-500">
                 {previewDoc.mime_type ?? 'Unknown type'} &middot;{' '}
                 {formatFileSize(previewDoc.file_size_bytes)}
                 {previewDoc.uploader?.full_name &&
                   ` · Uploaded by ${previewDoc.uploader.full_name}`}
               </div>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => handleDownload(previewDoc)}
-              >
-                <Download className="h-3.5 w-3.5" />
-                Download
-              </Button>
             </div>
           </div>
-        )}
-      </Modal>
+        </div>
+      )}
     </div>
   )
 }
