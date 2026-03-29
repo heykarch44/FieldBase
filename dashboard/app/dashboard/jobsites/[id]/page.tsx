@@ -1304,7 +1304,7 @@ function DocumentsTab({ orgId, siteId }: { orgId: string | null; siteId: string 
         open={!!previewDoc}
         onClose={closePreview}
         title={previewDoc?.name ?? 'Document Preview'}
-        className="max-w-4xl"
+        className="max-w-7xl !max-h-[95vh]"
       >
         {previewLoading && (
           <div className="flex flex-col items-center justify-center py-16">
@@ -1322,7 +1322,7 @@ function DocumentsTab({ orgId, siteId }: { orgId: string | null; siteId: string 
                 <img
                   src={previewUrl}
                   alt={previewDoc.name}
-                  className="max-h-[70vh] max-w-full rounded-lg object-contain"
+                  className="max-h-[85vh] max-w-full rounded-lg object-contain"
                 />
               </div>
             )}
@@ -1332,7 +1332,7 @@ function DocumentsTab({ orgId, siteId }: { orgId: string | null; siteId: string 
               <iframe
                 src={previewUrl}
                 title={previewDoc.name}
-                className="h-[70vh] w-full rounded-lg border border-sand-200"
+                className="h-[82vh] w-full rounded-lg border border-sand-200"
               />
             )}
 
