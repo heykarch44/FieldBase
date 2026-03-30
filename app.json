@@ -75,7 +75,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "fieldiq-app"
+        "projectId": ""
       },
       "router": {
         "origin": false
