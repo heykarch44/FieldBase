@@ -20,7 +20,8 @@
         "NSCameraUsageDescription": "Take photos of equipment and service work",
         "NSLocationWhenInUseUsageDescription": "Record GPS location for arrive/depart timestamps",
         "NSPhotoLibraryUsageDescription": "Select photos to attach to service visits",
-        "NSFaceIDUsageDescription": "Use Face ID for quick login"
+        "NSFaceIDUsageDescription": "Use Face ID for quick login",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -82,6 +83,14 @@
         "origin": false
       }
     },
-    "owner": "heykarch44"
+    "owner": "heykarch44",
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 5000
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
   }
 }
