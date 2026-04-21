@@ -45,13 +45,15 @@ import {
   Image as ImageIcon,
   ChevronLeft,
   ChevronRight,
+  MessageSquare,
 } from 'lucide-react'
+import { NotesPanel } from '@/components/NotesPanel'
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type TabKey = 'overview' | 'service_orders' | 'visits' | 'photos' | 'documents' | 'equipment'
+type TabKey = 'overview' | 'service_orders' | 'visits' | 'notes' | 'photos' | 'documents' | 'equipment'
 
 interface Tab {
   key: TabKey
@@ -73,6 +75,7 @@ const TABS: Tab[] = [
   { key: 'overview', label: 'Overview', icon: <Info className="h-4 w-4" /> },
   { key: 'service_orders', label: 'Service Orders', icon: <ClipboardList className="h-4 w-4" /> },
   { key: 'visits', label: 'Visits', icon: <Clock className="h-4 w-4" /> },
+  { key: 'notes', label: 'Notes', icon: <MessageSquare className="h-4 w-4" /> },
   { key: 'photos', label: 'Photos', icon: <ImageIcon className="h-4 w-4" /> },
   { key: 'documents', label: 'Documents', icon: <FileText className="h-4 w-4" /> },
   { key: 'equipment', label: 'Equipment', icon: <Wrench className="h-4 w-4" /> },
@@ -126,6 +129,8 @@ export default function SiteDetailPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
   const [showAddOrder, setShowAddOrder] = useState(false)
   const [activeOrgId, setActiveOrgId] = useState<string | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [canManage, setCanManage] = useState(false)
 
   // Edit service order state
   const [editOrder, setEditOrder] = useState<ServiceOrder | null>(null)
@@ -158,12 +163,23 @@ export default function SiteDetailPage() {
     // Get user's org_id
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
+      setCurrentUserId(user.id)
       const { data: userData } = await supabase
         .from('users')
         .select('active_org_id')
         .eq('id', user.id)
         .single()
-      if (userData?.active_org_id) setActiveOrgId(userData.active_org_id)
+      if (userData?.active_org_id) {
+        setActiveOrgId(userData.active_org_id)
+        const { data: memberData } = await supabase
+          .from('org_members')
+          .select('role')
+          .eq('org_id', userData.active_org_id)
+          .eq('user_id', user.id)
+          .maybeSingle()
+        const role = memberData?.role
+        setCanManage(role === 'owner' || role === 'admin' || role === 'manager')
+      }
     }
 
     const [siteRes, ordersRes, visitsRes, equipmentRes] = await Promise.all([
@@ -521,6 +537,17 @@ export default function SiteDetailPage() {
         />
       )}
       {activeTab === 'visits' && <VisitsTab visits={visits} />}
+      {activeTab === 'notes' && (
+        <div className="max-w-3xl">
+          <NotesPanel
+            orgId={activeOrgId}
+            jobsiteId={id}
+            currentUserId={currentUserId}
+            canManage={canManage}
+            title="Site Notes"
+          />
+        </div>
+      )}
       {activeTab === 'photos' && <PhotosTab orgId={activeOrgId} siteId={id} />}
       {activeTab === 'documents' && <DocumentsTab orgId={activeOrgId} siteId={id} />}
       {activeTab === 'equipment' && <EquipmentTab equipment={equipment} />}
@@ -668,6 +695,19 @@ export default function SiteDetailPage() {
                 {editSaving ? (<><Loader2 className="h-4 w-4 animate-spin" /> Saving...</>) : 'Save Changes'}
               </Button>
             </div>
+
+            {editOrder.jobsite_id && (
+              <div className="border-t border-sand-100 pt-4">
+                <NotesPanel
+                  orgId={editOrder.org_id}
+                  jobsiteId={editOrder.jobsite_id}
+                  serviceOrderId={editOrder.id}
+                  currentUserId={currentUserId}
+                  canManage={canManage}
+                  title="Service Order Notes"
+                />
+              </div>
+            )}
           </div>
         </Modal>
       )}

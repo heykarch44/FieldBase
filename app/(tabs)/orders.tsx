@@ -18,6 +18,7 @@ import {
 import { StatusBadge } from "../../src/components/StatusBadge";
 import { Card } from "../../src/components/Card";
 import { EmptyState } from "../../src/components/EmptyState";
+import { NotesSection } from "../../src/components/NotesSection";
 import { Colors, UrgencyColors } from "../../src/constants/theme";
 
 const URGENCY_LABELS: Record<string, { label: string; bg: string; text: string }> = {
@@ -197,6 +198,20 @@ export default function OrdersScreen() {
                 <View style={styles.accessNotesBox}>
                   <Ionicons name="information-circle" size={14} color={Colors.primary[600]} />
                   <Text style={styles.accessNotesText}>{item.jobsite.access_notes}</Text>
+                </View>
+              )}
+
+              {/* Service Order Notes */}
+              {item.jobsite_id && (
+                <View style={styles.notesWrap}>
+                  <NotesSection
+                    jobsiteId={item.jobsite_id}
+                    serviceOrderId={item.id}
+                    orgId={item.org_id}
+                    title="Service Order Notes"
+                    compact
+                    embedded
+                  />
                 </View>
               )}
             </View>
@@ -443,5 +458,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#92400e",
     flex: 1,
+  },
+  notesWrap: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#f3f4f6",
   },
 });

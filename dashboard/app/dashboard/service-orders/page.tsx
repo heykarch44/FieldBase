@@ -25,6 +25,7 @@ import {
 } from '@dnd-kit/core'
 import { ClipboardList, Loader2, X, Check, ChevronDown } from 'lucide-react'
 import type { ServiceOrder, ServiceOrderStatus, UrgencyLevel } from '@/lib/types'
+import { NotesPanel } from '@/components/NotesPanel'
 
 interface OrgMember {
   user_id: string
@@ -310,6 +311,8 @@ export default function ServiceOrdersPage() {
   const [orgMembers, setOrgMembers] = useState<OrgMember[]>([])
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [canManage, setCanManage] = useState(false)
 
   // PointerSensor with a small distance constraint so clicks don't trigger drag
   const sensors = useSensors(
@@ -362,6 +365,29 @@ export default function ServiceOrdersPage() {
   useEffect(() => {
     fetchOrders()
   }, [fetchOrders])
+
+  useEffect(() => {
+    (async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      setCurrentUserId(user.id)
+      const { data: userData } = await supabase
+        .from('users')
+        .select('active_org_id')
+        .eq('id', user.id)
+        .single()
+      if (!userData?.active_org_id) return
+      const { data: memberData } = await supabase
+        .from('org_members')
+        .select('role')
+        .eq('org_id', userData.active_org_id)
+        .eq('user_id', user.id)
+        .maybeSingle()
+      const role = memberData?.role
+      setCanManage(role === 'owner' || role === 'admin' || role === 'manager')
+    })()
+  }, [])
 
   async function fetchOrgMembers() {
     const supabase = createClient()
@@ -705,6 +731,20 @@ export default function ServiceOrdersPage() {
                 )}
               </Button>
             </div>
+
+            {/* Notes Panel */}
+            {selectedOrder.jobsite_id && (
+              <div className="border-t border-sand-100 pt-4">
+                <NotesPanel
+                  orgId={selectedOrder.org_id}
+                  jobsiteId={selectedOrder.jobsite_id}
+                  serviceOrderId={selectedOrder.id}
+                  currentUserId={currentUserId}
+                  canManage={canManage}
+                  title="Service Order Notes"
+                />
+              </div>
+            )}
           </div>
         </Modal>
       )}

@@ -213,6 +213,18 @@ export interface Photo {
   created_at: string;
 }
 
+export interface SiteNote {
+  id: string;
+  org_id: string;
+  jobsite_id: string;
+  service_order_id: string | null;
+  visit_id: string | null;
+  author_id: string | null;
+  body: string;
+  created_at: string;
+  author?: { id: string; full_name: string | null; email: string };
+}
+
 export interface SitePhoto {
   id: string;
   org_id: string;

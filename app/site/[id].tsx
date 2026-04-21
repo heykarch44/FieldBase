@@ -12,6 +12,7 @@ import {
   Image,
   Alert,
   Dimensions,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -24,23 +25,16 @@ import { useAuth } from "../../src/providers/AuthProvider";
 import { useSitePhotos, getSignedPhotoUrl } from "../../src/hooks/useSitePhotos";
 import type { SitePhoto } from "../../src/hooks/useSitePhotos";
 import { useUploadSitePhotos } from "../../src/hooks/useUploadSitePhotos";
+import { useSiteDocuments, getSignedDocumentUrl } from "../../src/hooks/useSiteDocuments";
+import type { SiteDocument } from "../../src/hooks/useSiteDocuments";
 import { PhotoViewer } from "../../src/components/PhotoViewer";
+import { NotesSection } from "../../src/components/NotesSection";
 import type {
   Jobsite,
   ServiceOrder,
   Visit,
   Equipment,
 } from "../../src/types/database";
-
-interface SiteDocument {
-  id: string;
-  name: string;
-  doc_type: string;
-  mime_type: string | null;
-  file_size_bytes: number | null;
-  storage_url: string;
-  created_at: string;
-}
 
 const URGENCY_COLORS: Record<string, { bg: string; text: string }> = {
   low: { bg: "#f0fdf4", text: "#15803d" },
@@ -83,6 +77,13 @@ function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ");
 }
 
+function formatFileSize(bytes: number | null): string {
+  if (!bytes) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function SiteDetailScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
@@ -98,9 +99,12 @@ export default function SiteDetailScreen() {
   const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>([]);
   const [visits, setVisits] = useState<Visit[]>([]);
   const [equipment, setEquipment] = useState<Equipment[]>([]);
-  const [documents, setDocuments] = useState<SiteDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const { documents } = useSiteDocuments(id);
+  const [previewDoc, setPreviewDoc] = useState<SiteDocument | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const { photos, refetch: refetchPhotos } = useSitePhotos(id);
   const [thumbUrls, setThumbUrls] = useState<Record<string, string | null>>({});
@@ -191,7 +195,7 @@ export default function SiteDetailScreen() {
     if (!id) return;
     setNotFound(false);
 
-    const [siteRes, ordersRes, visitsRes, equipmentRes, documentsRes] =
+    const [siteRes, ordersRes, visitsRes, equipmentRes] =
       await Promise.all([
         supabase.from("jobsites").select("*").eq("id", id).single(),
         supabase
@@ -209,12 +213,6 @@ export default function SiteDetailScreen() {
           .select("*")
           .eq("jobsite_id", id)
           .order("name"),
-        supabase
-          .from("documents")
-          .select("id, name, doc_type, mime_type, file_size_bytes, storage_url, created_at")
-          .eq("entity_type", "jobsite")
-          .eq("entity_id", id)
-          .order("created_at", { ascending: false }),
       ]);
 
     if (!siteRes.data) {
@@ -227,7 +225,6 @@ export default function SiteDetailScreen() {
     setServiceOrders((ordersRes.data ?? []) as ServiceOrder[]);
     setVisits((visitsRes.data ?? []) as Visit[]);
     setEquipment((equipmentRes.data ?? []) as Equipment[]);
-    setDocuments((documentsRes.data ?? []) as SiteDocument[]);
     setLoading(false);
   }, [id]);
 
@@ -259,11 +256,32 @@ export default function SiteDetailScreen() {
   };
 
   const openDocument = async (doc: SiteDocument) => {
-    const { data, error } = await supabase.storage
-      .from("fieldbase")
-      .createSignedUrl(doc.storage_url, 3600);
-    if (error || !data?.signedUrl) return;
-    Linking.openURL(data.signedUrl);
+    const isImage = doc.mime_type?.startsWith("image/");
+    if (isImage) {
+      setPreviewDoc(doc);
+      setPreviewUrl(null);
+      setPreviewLoading(true);
+      const url = await getSignedDocumentUrl(doc.storage_url, 3600);
+      setPreviewLoading(false);
+      if (!url) {
+        setPreviewDoc(null);
+        Alert.alert("Couldn't open document");
+        return;
+      }
+      setPreviewUrl(url);
+      return;
+    }
+    const url = await getSignedDocumentUrl(doc.storage_url, 3600);
+    if (!url) {
+      Alert.alert("Couldn't open document");
+      return;
+    }
+    Linking.openURL(url);
+  };
+
+  const closePreview = () => {
+    setPreviewDoc(null);
+    setPreviewUrl(null);
   };
 
   if (loading) {
@@ -630,56 +648,79 @@ export default function SiteDetailScreen() {
         )}
 
         {/* Documents */}
-        {documents.length > 0 && (
-          <>
-            <View style={styles.sectionHeader}>
+        <View style={styles.sectionHeader}>
+          <Ionicons
+            name="document-text"
+            size={16}
+            color={Colors.primary[600]}
+          />
+          <Text style={styles.sectionHeaderText}>
+            Documents ({documents.length})
+          </Text>
+        </View>
+        {documents.length === 0 ? (
+          <Card style={styles.card}>
+            <View style={styles.emptyBox}>
               <Ionicons
-                name="document-text"
-                size={16}
-                color={Colors.primary[600]}
+                name="document-outline"
+                size={32}
+                color={Colors.gray[300]}
               />
-              <Text style={styles.sectionHeaderText}>
-                Documents ({documents.length})
-              </Text>
+              <Text style={styles.emptyText}>No documents yet</Text>
             </View>
-            {documents.map((doc) => (
-              <TouchableOpacity
-                key={doc.id}
-                onPress={() => openDocument(doc)}
-                activeOpacity={0.7}
-              >
-                <Card style={styles.card}>
-                  <View style={styles.docRow}>
-                    <Ionicons
-                      name={
-                        doc.mime_type?.startsWith("image/")
-                          ? "image"
-                          : doc.mime_type === "application/pdf"
-                          ? "document-text"
-                          : "document"
-                      }
-                      size={20}
-                      color={Colors.primary[600]}
-                    />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.docName} numberOfLines={1}>
-                        {doc.name}
-                      </Text>
+          </Card>
+        ) : (
+          documents.map((doc) => (
+            <TouchableOpacity
+              key={doc.id}
+              onPress={() => openDocument(doc)}
+              activeOpacity={0.7}
+            >
+              <Card style={styles.card}>
+                <View style={styles.docRow}>
+                  <Ionicons
+                    name={
+                      doc.mime_type?.startsWith("image/")
+                        ? "image"
+                        : doc.mime_type === "application/pdf"
+                        ? "document-text"
+                        : "document"
+                    }
+                    size={20}
+                    color={Colors.primary[600]}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.docName} numberOfLines={1}>
+                      {doc.name}
+                    </Text>
+                    <Text style={styles.docMeta}>
+                      {capitalize(doc.doc_type)} ·{" "}
+                      {formatFileSize(doc.file_size_bytes)} ·{" "}
+                      {formatDate(doc.created_at)}
+                    </Text>
+                    {doc.uploader?.full_name && (
                       <Text style={styles.docMeta}>
-                        {capitalize(doc.doc_type)} · {formatDate(doc.created_at)}
+                        by {doc.uploader.full_name}
                       </Text>
-                    </View>
-                    <Ionicons
-                      name="open-outline"
-                      size={16}
-                      color={Colors.gray[400]}
-                    />
+                    )}
                   </View>
-                </Card>
-              </TouchableOpacity>
-            ))}
-          </>
+                  <Ionicons
+                    name="open-outline"
+                    size={16}
+                    color={Colors.gray[400]}
+                  />
+                </View>
+              </Card>
+            </TouchableOpacity>
+          ))
         )}
+
+        {/* Notes */}
+        <NotesSection
+          jobsiteId={id}
+          orgId={site.org_id}
+          title="Site Notes"
+        />
 
         {/* Photos */}
         <View style={styles.sectionHeader}>
@@ -884,6 +925,47 @@ export default function SiteDetailScreen() {
         onDelete={handleDeletePhoto}
         canDelete={canDeletePhoto}
       />
+
+      <Modal
+        visible={previewDoc !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={closePreview}
+      >
+        <View style={styles.previewOverlay}>
+          <View style={styles.previewHeader}>
+            <Text style={styles.previewTitle} numberOfLines={1}>
+              {previewDoc?.name ?? ""}
+            </Text>
+            <TouchableOpacity
+              onPress={closePreview}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="close" size={26} color="white" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.previewBody}>
+            {previewLoading || !previewUrl ? (
+              <ActivityIndicator size="large" color="white" />
+            ) : (
+              <Image
+                source={{ uri: previewUrl }}
+                style={styles.previewImage}
+                resizeMode="contain"
+              />
+            )}
+          </View>
+          {previewDoc && previewUrl && (
+            <TouchableOpacity
+              style={styles.previewOpenBtn}
+              onPress={() => Linking.openURL(previewUrl)}
+            >
+              <Ionicons name="open-outline" size={16} color="white" />
+              <Text style={styles.previewOpenBtnText}>Open externally</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1261,6 +1343,51 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary[600],
   },
   emptyPhotoBtnText: {
+    color: "white",
+    fontWeight: "600",
+    fontSize: 13,
+  },
+  previewOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.95)",
+  },
+  previewHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    paddingTop: 50,
+    gap: 12,
+  },
+  previewTitle: {
+    color: "white",
+    fontSize: 15,
+    fontWeight: "600",
+    flex: 1,
+  },
+  previewBody: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  previewImage: {
+    width: "100%",
+    height: "100%",
+  },
+  previewOpenBtn: {
+    position: "absolute",
+    bottom: 30,
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  previewOpenBtnText: {
     color: "white",
     fontWeight: "600",
     fontSize: 13,
