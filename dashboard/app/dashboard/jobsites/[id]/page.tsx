@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Modal } from '@/components/ui/modal'
 import { formatDate, formatDateTime, capitalizeFirst, cn } from '@/lib/utils'
-import type { Jobsite, ServiceOrder, Visit, Equipment, UrgencyLevel, ServiceOrderStatus } from '@/lib/types'
+import type { Jobsite, ServiceOrder, Visit, Equipment, UrgencyLevel, ServiceOrderStatus, SitePhoto } from '@/lib/types'
 import {
   ArrowLeft,
   MapPin,
@@ -42,13 +42,16 @@ import {
   Check,
   ChevronDown,
   Pencil,
+  Image as ImageIcon,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type TabKey = 'overview' | 'service_orders' | 'visits' | 'documents' | 'equipment'
+type TabKey = 'overview' | 'service_orders' | 'visits' | 'photos' | 'documents' | 'equipment'
 
 interface Tab {
   key: TabKey
@@ -70,6 +73,7 @@ const TABS: Tab[] = [
   { key: 'overview', label: 'Overview', icon: <Info className="h-4 w-4" /> },
   { key: 'service_orders', label: 'Service Orders', icon: <ClipboardList className="h-4 w-4" /> },
   { key: 'visits', label: 'Visits', icon: <Clock className="h-4 w-4" /> },
+  { key: 'photos', label: 'Photos', icon: <ImageIcon className="h-4 w-4" /> },
   { key: 'documents', label: 'Documents', icon: <FileText className="h-4 w-4" /> },
   { key: 'equipment', label: 'Equipment', icon: <Wrench className="h-4 w-4" /> },
 ]
@@ -517,6 +521,7 @@ export default function SiteDetailPage() {
         />
       )}
       {activeTab === 'visits' && <VisitsTab visits={visits} />}
+      {activeTab === 'photos' && <PhotosTab orgId={activeOrgId} siteId={id} />}
       {activeTab === 'documents' && <DocumentsTab orgId={activeOrgId} siteId={id} />}
       {activeTab === 'equipment' && <EquipmentTab equipment={equipment} />}
 
@@ -1834,6 +1839,360 @@ function EquipmentTab({ equipment }: { equipment: Equipment[] }) {
       </div>
     </div>
   )
+}
+
+// ---------------------------------------------------------------------------
+// Tab: Photos
+// ---------------------------------------------------------------------------
+
+function PhotosTab({ orgId, siteId }: { orgId: string | null; siteId: string }) {
+  const [photos, setPhotos] = useState<SitePhoto[]>([])
+  const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null)
+  const [urls, setUrls] = useState<Record<string, string | null>>({})
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const fetchPhotos = useCallback(async () => {
+    if (!siteId) return
+    setLoading(true)
+    const supabase = createClient()
+    const { data } = await supabase
+      .from('site_photos')
+      .select('*, uploader:users!site_photos_uploaded_by_fkey(id, full_name, email)')
+      .eq('jobsite_id', siteId)
+      .order('created_at', { ascending: false })
+    setPhotos((data ?? []) as SitePhoto[])
+    setLoading(false)
+  }, [siteId])
+
+  useEffect(() => {
+    fetchPhotos()
+  }, [fetchPhotos])
+
+  // Resolve signed URLs
+  useEffect(() => {
+    let cancelled = false
+    const missing = photos.filter((p) => urls[p.id] === undefined)
+    if (missing.length === 0) return
+    ;(async () => {
+      const supabase = createClient()
+      const entries = await Promise.all(
+        missing.map(async (p) => {
+          const { data } = await supabase.storage
+            .from('site-photos')
+            .createSignedUrl(p.storage_path, 3600)
+          return [p.id, data?.signedUrl ?? null] as const
+        })
+      )
+      if (cancelled) return
+      setUrls((prev) => {
+        const next = { ...prev }
+        for (const [id2, url] of entries) next[id2] = url
+        return next
+      })
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [photos, urls])
+
+  async function handleUpload(files: FileList | null) {
+    if (!files || files.length === 0) return
+    if (!orgId) {
+      setUploadError('No organization found. Please refresh.')
+      return
+    }
+    setUploadError(null)
+    setUploading(true)
+    const total = files.length
+    setUploadProgress({ done: 0, total })
+
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    let done = 0
+    let failed = 0
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      try {
+        const ext = (file.name.split('.').pop() ?? 'jpg').toLowerCase()
+        const id = crypto.randomUUID()
+        const storagePath = `${orgId}/${siteId}/${id}.${ext}`
+
+        const { error: uploadErr } = await supabase.storage
+          .from('site-photos')
+          .upload(storagePath, file, {
+            contentType: file.type || 'image/jpeg',
+            upsert: false,
+          })
+        if (uploadErr) throw uploadErr
+
+        // Read image dimensions
+        let width: number | null = null
+        let height: number | null = null
+        try {
+          const dims = await readImageDimensions(file)
+          width = dims.width
+          height = dims.height
+        } catch {
+          // ignore
+        }
+
+        const { error: insertErr } = await supabase.from('site_photos').insert({
+          org_id: orgId,
+          jobsite_id: siteId,
+          uploaded_by: user?.id ?? null,
+          storage_path: storagePath,
+          file_name: file.name,
+          mime_type: file.type || null,
+          file_size_bytes: file.size,
+          width,
+          height,
+        })
+
+        if (insertErr) {
+          await supabase.storage.from('site-photos').remove([storagePath])
+          throw insertErr
+        }
+
+        done += 1
+      } catch (err) {
+        failed += 1
+        const msg = err instanceof Error ? err.message : 'Upload failed'
+        setUploadError(msg)
+      }
+      setUploadProgress({ done: done + failed, total })
+    }
+
+    setUploading(false)
+    setUploadProgress(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+    fetchPhotos()
+  }
+
+  async function handleDelete(photo: SitePhoto) {
+    if (!confirm(`Delete this photo? This cannot be undone.`)) return
+    setDeleting(photo.id)
+    const supabase = createClient()
+    await supabase.storage.from('site-photos').remove([photo.storage_path])
+    await supabase.from('site_photos').delete().eq('id', photo.id)
+    setDeleting(null)
+    if (lightboxIndex !== null) {
+      const newPhotos = photos.filter((p) => p.id !== photo.id)
+      if (newPhotos.length === 0) setLightboxIndex(null)
+      else setLightboxIndex(Math.min(lightboxIndex, newPhotos.length - 1))
+    }
+    fetchPhotos()
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="h-9 w-36" />
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="aspect-square w-full rounded-xl" />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  const currentLightbox = lightboxIndex !== null ? photos[lightboxIndex] : null
+  const currentUrl = currentLightbox ? urls[currentLightbox.id] : null
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-sand-500">
+          {photos.length} photo{photos.length !== 1 ? 's' : ''}
+        </p>
+        <div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => handleUpload(e.target.files)}
+          />
+          <Button onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+            {uploading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Uploading{uploadProgress ? ` ${uploadProgress.done}/${uploadProgress.total}` : '...'}
+              </>
+            ) : (
+              <>
+                <Upload className="h-4 w-4" />
+                Upload Photos
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+
+      {uploadError && (
+        <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{uploadError}</div>
+      )}
+
+      {photos.length === 0 ? (
+        <Card>
+          <div className="flex flex-col items-center py-12 text-center">
+            <ImageIcon className="mb-3 h-10 w-10 text-sand-300" />
+            <p className="font-medium text-sand-600">No photos yet</p>
+            <p className="mt-1 text-sm text-sand-400">
+              Upload photos of this site. Techs can also add photos from mobile.
+            </p>
+          </div>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {photos.map((photo, idx) => {
+            const url = urls[photo.id]
+            return (
+              <button
+                key={photo.id}
+                onClick={() => setLightboxIndex(idx)}
+                className="group relative aspect-square overflow-hidden rounded-xl border border-sand-200 bg-sand-100 transition-shadow hover:shadow-md"
+                type="button"
+              >
+                {url ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={url}
+                    alt={photo.file_name}
+                    className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                  />
+                ) : url === null ? (
+                  <div className="flex h-full w-full items-center justify-center text-sand-400">
+                    <AlertTriangle className="h-6 w-6" />
+                  </div>
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center">
+                    <Loader2 className="h-5 w-5 animate-spin text-sand-400" />
+                  </div>
+                )}
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
+                  <p className="truncate text-xs font-medium text-white">
+                    {photo.uploader?.full_name ?? 'Unknown'}
+                  </p>
+                  <p className="text-[10px] text-white/80">
+                    {formatDate(photo.created_at)}
+                  </p>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Lightbox */}
+      {currentLightbox && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setLightboxIndex(null) }}
+        >
+          {/* Top bar */}
+          <div className="absolute left-0 right-0 top-0 z-10 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-6 py-4 text-white">
+            <div className="text-sm">
+              {(lightboxIndex ?? 0) + 1} / {photos.length}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="danger"
+                onClick={() => handleDelete(currentLightbox)}
+                disabled={deleting === currentLightbox.id}
+              >
+                {deleting === currentLightbox.id ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="h-3.5 w-3.5" />
+                )}
+                Delete
+              </Button>
+              <button
+                onClick={() => setLightboxIndex(null)}
+                className="rounded-lg p-1.5 text-white/80 hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Prev button */}
+          {(lightboxIndex ?? 0) > 0 && (
+            <button
+              onClick={() => setLightboxIndex((lightboxIndex ?? 0) - 1)}
+              className="absolute left-4 z-10 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+            >
+              <ChevronLeft className="h-6 w-6" />
+            </button>
+          )}
+
+          {/* Image */}
+          <div className="flex max-h-[85vh] max-w-[90vw] items-center justify-center">
+            {currentUrl ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={currentUrl}
+                alt={currentLightbox.file_name}
+                className="max-h-[85vh] max-w-[90vw] rounded-lg object-contain"
+              />
+            ) : (
+              <Loader2 className="h-8 w-8 animate-spin text-white" />
+            )}
+          </div>
+
+          {/* Next button */}
+          {(lightboxIndex ?? 0) < photos.length - 1 && (
+            <button
+              onClick={() => setLightboxIndex((lightboxIndex ?? 0) + 1)}
+              className="absolute right-4 z-10 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+            >
+              <ChevronRight className="h-6 w-6" />
+            </button>
+          )}
+
+          {/* Bottom info */}
+          <div className="absolute left-0 right-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-6 py-4 text-white">
+            {currentLightbox.caption && (
+              <p className="mb-1 text-sm">{currentLightbox.caption}</p>
+            )}
+            <p className="text-xs text-white/70">
+              {currentLightbox.uploader?.full_name ?? 'Unknown'} &middot;{' '}
+              {formatDate(currentLightbox.created_at)}
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function readImageDimensions(file: globalThis.File): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const img = new window.Image()
+    img.onload = () => {
+      resolve({ width: img.naturalWidth, height: img.naturalHeight })
+      URL.revokeObjectURL(url)
+    }
+    img.onerror = (e) => {
+      URL.revokeObjectURL(url)
+      reject(e)
+    }
+    img.src = url
+  })
 }
 
 // ---------------------------------------------------------------------------

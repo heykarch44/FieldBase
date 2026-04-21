@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,9 @@ import {
   Linking,
   Platform,
   ActivityIndicator,
+  Image,
+  Alert,
+  Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -17,6 +20,11 @@ import { supabase } from "../../src/lib/supabase";
 import { Card } from "../../src/components/Card";
 import { Colors } from "../../src/constants/theme";
 import { useOrg } from "../../src/providers/OrgProvider";
+import { useAuth } from "../../src/providers/AuthProvider";
+import { useSitePhotos, getSignedPhotoUrl } from "../../src/hooks/useSitePhotos";
+import type { SitePhoto } from "../../src/hooks/useSitePhotos";
+import { useUploadSitePhotos } from "../../src/hooks/useUploadSitePhotos";
+import { PhotoViewer } from "../../src/components/PhotoViewer";
 import type {
   Jobsite,
   ServiceOrder,
@@ -84,6 +92,8 @@ export default function SiteDetailScreen() {
     (orgSettings["jobsite_label"] as string | undefined) ?? "Site";
   const siteLabelSingular = siteLabel.replace(/s$/i, "") || "Site";
 
+  const { user, memberships } = useAuth();
+
   const [site, setSite] = useState<Jobsite | null>(null);
   const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>([]);
   const [visits, setVisits] = useState<Visit[]>([]);
@@ -91,6 +101,91 @@ export default function SiteDetailScreen() {
   const [documents, setDocuments] = useState<SiteDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+
+  const { photos, refetch: refetchPhotos } = useSitePhotos(id);
+  const [thumbUrls, setThumbUrls] = useState<Record<string, string | null>>({});
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const {
+    pickFromCamera,
+    pickFromLibrary,
+    uploading,
+    progress,
+  } = useUploadSitePhotos({
+    jobsiteId: id,
+    onUploaded: refetchPhotos,
+  });
+
+  const isManager = useMemo(() => {
+    if (!site) return false;
+    const m = memberships.find((mm) => mm.org_id === site.org_id);
+    return !!m && (m.role === "owner" || m.role === "admin" || m.role === "manager");
+  }, [memberships, site]);
+
+  const canDeletePhoto = useCallback(
+    (p: SitePhoto) => isManager || p.uploaded_by === user?.id,
+    [isManager, user?.id]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    const missing = photos.filter((p) => thumbUrls[p.id] === undefined);
+    if (missing.length === 0) return;
+    (async () => {
+      const entries = await Promise.all(
+        missing.map(async (p) => {
+          const url = await getSignedPhotoUrl(p.storage_path, 3600);
+          return [p.id, url] as const;
+        })
+      );
+      if (cancelled) return;
+      setThumbUrls((prev) => {
+        const next = { ...prev };
+        for (const [id2, url] of entries) next[id2] = url;
+        return next;
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [photos, thumbUrls]);
+
+  const handleDeletePhoto = useCallback(
+    async (p: SitePhoto) => {
+      Alert.alert(
+        "Delete photo?",
+        "This cannot be undone.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: async () => {
+              await supabase.storage.from("site-photos").remove([p.storage_path]);
+              const { error } = await supabase
+                .from("site_photos")
+                .delete()
+                .eq("id", p.id);
+              if (error) {
+                Alert.alert("Delete failed", error.message);
+                return;
+              }
+              setViewerIndex(null);
+              refetchPhotos();
+            },
+          },
+        ]
+      );
+    },
+    [refetchPhotos]
+  );
+
+  const confirmAddPhotos = useCallback(() => {
+    Alert.alert("Add Photos", "Choose a source", [
+      { text: "Take Photo", onPress: () => pickFromCamera() },
+      { text: "Choose from Library", onPress: () => pickFromLibrary() },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  }, [pickFromCamera, pickFromLibrary]);
 
   const fetchData = useCallback(async () => {
     if (!id) return;
@@ -586,6 +681,99 @@ export default function SiteDetailScreen() {
           </>
         )}
 
+        {/* Photos */}
+        <View style={styles.sectionHeader}>
+          <Ionicons name="images" size={16} color={Colors.primary[600]} />
+          <Text style={styles.sectionHeaderText}>
+            Photos ({photos.length})
+          </Text>
+        </View>
+
+        <View style={styles.photoActionsRow}>
+          <TouchableOpacity
+            style={[styles.photoActionBtn, uploading && styles.photoActionBtnDisabled]}
+            onPress={() => pickFromCamera()}
+            disabled={uploading}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="camera" size={18} color="white" />
+            <Text style={styles.photoActionBtnText}>Take Photo</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.photoActionBtnAlt, uploading && styles.photoActionBtnDisabled]}
+            onPress={() => pickFromLibrary()}
+            disabled={uploading}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="images" size={18} color={Colors.primary[700]} />
+            <Text style={styles.photoActionBtnAltText}>Add from Gallery</Text>
+          </TouchableOpacity>
+        </View>
+
+        {uploading && (
+          <View style={styles.uploadBanner}>
+            <ActivityIndicator size="small" color={Colors.primary[600]} />
+            <Text style={styles.uploadBannerText}>
+              Uploading {progress.done + progress.failed + 1} of {progress.total}…
+            </Text>
+          </View>
+        )}
+
+        {photos.length === 0 ? (
+          <Card style={styles.card}>
+            <View style={styles.emptyBox}>
+              <Ionicons
+                name="images-outline"
+                size={32}
+                color={Colors.gray[300]}
+              />
+              <Text style={styles.emptyText}>No photos yet</Text>
+              <TouchableOpacity
+                style={styles.emptyPhotoBtn}
+                onPress={confirmAddPhotos}
+              >
+                <Text style={styles.emptyPhotoBtnText}>Add the first photo</Text>
+              </TouchableOpacity>
+            </View>
+          </Card>
+        ) : (
+          <View style={styles.photoGrid}>
+            {photos.map((p, idx) => {
+              const url = thumbUrls[p.id];
+              return (
+                <TouchableOpacity
+                  key={p.id}
+                  style={styles.photoThumbWrap}
+                  activeOpacity={0.8}
+                  onPress={() => setViewerIndex(idx)}
+                  onLongPress={() => {
+                    if (canDeletePhoto(p)) handleDeletePhoto(p);
+                  }}
+                >
+                  {url ? (
+                    <Image source={{ uri: url }} style={styles.photoThumb} />
+                  ) : (
+                    <View style={[styles.photoThumb, styles.photoThumbLoading]}>
+                      {url === null ? (
+                        <Ionicons
+                          name="alert-circle-outline"
+                          size={20}
+                          color={Colors.gray[400]}
+                        />
+                      ) : (
+                        <ActivityIndicator
+                          size="small"
+                          color={Colors.primary[600]}
+                        />
+                      )}
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
         {/* Past visits */}
         {pastVisits.length > 0 && (
           <>
@@ -687,6 +875,15 @@ export default function SiteDetailScreen() {
 
         <View style={{ height: 48 }} />
       </ScrollView>
+
+      <PhotoViewer
+        visible={viewerIndex !== null}
+        photos={photos}
+        startIndex={viewerIndex ?? 0}
+        onClose={() => setViewerIndex(null)}
+        onDelete={handleDeletePhoto}
+        canDelete={canDeletePhoto}
+      />
     </SafeAreaView>
   );
 }
@@ -978,5 +1175,94 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.gray[500],
     marginTop: 4,
+  },
+  photoActionsRow: {
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  photoActionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: Colors.primary[600],
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  photoActionBtnText: {
+    color: "white",
+    fontWeight: "600",
+    fontSize: 13,
+  },
+  photoActionBtnAlt: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: Colors.primary[50],
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.primary[200],
+  },
+  photoActionBtnAltText: {
+    color: Colors.primary[700],
+    fontWeight: "600",
+    fontSize: 13,
+  },
+  photoActionBtnDisabled: {
+    opacity: 0.6,
+  },
+  uploadBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: Colors.primary[50],
+    borderRadius: 10,
+  },
+  uploadBannerText: {
+    fontSize: 13,
+    color: Colors.primary[700],
+    fontWeight: "500",
+  },
+  photoGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    paddingHorizontal: 12,
+    gap: 4,
+  },
+  photoThumbWrap: {
+    width: (Dimensions.get("window").width - 32) / 3,
+    aspectRatio: 1,
+    padding: 2,
+  },
+  photoThumb: {
+    flex: 1,
+    borderRadius: 8,
+    backgroundColor: Colors.gray[100],
+  },
+  photoThumbLoading: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyPhotoBtn: {
+    marginTop: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: Colors.primary[600],
+  },
+  emptyPhotoBtnText: {
+    color: "white",
+    fontWeight: "600",
+    fontSize: 13,
   },
 });

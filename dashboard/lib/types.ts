@@ -213,6 +213,25 @@ export interface Photo {
   created_at: string;
 }
 
+export interface SitePhoto {
+  id: string;
+  org_id: string;
+  jobsite_id: string;
+  service_order_id: string | null;
+  visit_id: string | null;
+  uploaded_by: string | null;
+  storage_path: string;
+  file_name: string;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  width: number | null;
+  height: number | null;
+  caption: string | null;
+  taken_at: string | null;
+  created_at: string;
+  uploader?: { id: string; full_name: string | null; email: string };
+}
+
 export interface Signature {
   id: string;
   org_id: string;
