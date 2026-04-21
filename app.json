@@ -22,7 +22,8 @@
         "NSPhotoLibraryUsageDescription": "Select photos to attach to service visits",
         "NSFaceIDUsageDescription": "Use Face ID for quick login",
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "buildNumber": "2"
     },
     "android": {
       "adaptiveIcon": {
@@ -31,6 +32,12 @@
       },
       "package": "com.fieldiq.app",
       "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
@@ -87,7 +94,8 @@
     "updates": {
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 5000
+      "fallbackToCacheTimeout": 5000,
+      "url": "https://u.expo.dev/ff3d2b8a-478a-4be0-9e3e-f2bb7c71861d"
     },
     "runtimeVersion": {
       "policy": "appVersion"
