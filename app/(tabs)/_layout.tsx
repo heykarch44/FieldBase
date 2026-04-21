@@ -8,7 +8,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useOrg } from "../../src/providers/OrgProvider";
 
 export default function TabLayout() {
-  const { routesEnabled } = useOrg();
+  const { routesEnabled, orgSettings } = useOrg();
+  const siteLabel =
+    (orgSettings["jobsite_label"] as string | undefined) ?? "Sites";
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: Colors.primary[600] }} edges={["top"]}>
@@ -49,6 +51,16 @@ export default function TabLayout() {
               />
             ),
             headerTitle: routesEnabled ? "Today's Route" : "My Schedule",
+          }}
+        />
+        <Tabs.Screen
+          name="sites"
+          options={{
+            title: siteLabel,
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="location" size={size} color={color} />
+            ),
+            headerTitle: `My ${siteLabel}`,
           }}
         />
         <Tabs.Screen

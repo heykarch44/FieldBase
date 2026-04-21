@@ -94,6 +94,15 @@ export interface FieldValue {
   updated_at: string;
 }
 
+export interface JobsiteAssignee {
+  id: string;
+  jobsite_id: string;
+  user_id: string;
+  org_id: string;
+  assigned_at: string;
+  user?: { id: string; full_name: string | null; email: string };
+}
+
 export interface Jobsite {
   id: string;
   org_id: string;
@@ -113,6 +122,7 @@ export interface Jobsite {
   tags: string[];
   created_at: string;
   updated_at: string;
+  assignees?: JobsiteAssignee[];
 }
 
 export interface Route {

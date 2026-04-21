@@ -24,6 +24,13 @@ export default function RootLayout() {
                   presentation: "card",
                 }}
               />
+              <Stack.Screen
+                name="site/[id]"
+                options={{
+                  headerShown: false,
+                  presentation: "card",
+                }}
+              />
             </Stack>
           </OrgProvider>
         </NetworkProvider>

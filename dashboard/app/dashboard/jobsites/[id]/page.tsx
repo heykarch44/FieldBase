@@ -138,6 +138,13 @@ export default function SiteDetailPage() {
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
 
+  // Site assignees (techs assigned directly to the site)
+  const [siteAssignees, setSiteAssignees] = useState<SiteAssigneeInfo[]>([])
+  const [showEditSiteAssignees, setShowEditSiteAssignees] = useState(false)
+  const [editSiteAssigneeIds, setEditSiteAssigneeIds] = useState<string[]>([])
+  const [siteAssigneesSaving, setSiteAssigneesSaving] = useState(false)
+  const [siteAssigneesError, setSiteAssigneesError] = useState<string | null>(null)
+
   const fetchData = useCallback(async () => {
     if (!id) return
     setLoading(true)
@@ -189,6 +196,22 @@ export default function SiteDetailPage() {
     setServiceOrders(fetchedOrders)
     setVisits((visitsRes.data ?? []) as Visit[])
     setEquipment((equipmentRes.data ?? []) as Equipment[])
+
+    // Fetch site assignees (techs assigned to this jobsite)
+    const { data: siteAssigneesData } = await supabase
+      .from('jobsite_assignees')
+      .select('user_id, user:users!jobsite_assignees_user_id_fkey(full_name)')
+      .eq('jobsite_id', id)
+    if (siteAssigneesData) {
+      setSiteAssignees(
+        (siteAssigneesData as { user_id: string; user: { full_name: string } | null }[]).map((r) => ({
+          user_id: r.user_id,
+          full_name: (r.user as { full_name: string } | null)?.full_name ?? 'Unknown',
+        }))
+      )
+    } else {
+      setSiteAssignees([])
+    }
 
     // Fetch assignees for these orders
     if (fetchedOrders.length > 0) {
@@ -304,6 +327,52 @@ export default function SiteDetailPage() {
 
     setEditSaving(false)
     setEditOrder(null)
+    fetchData()
+  }
+
+  function openEditSiteAssignees() {
+    setEditSiteAssigneeIds(siteAssignees.map((a) => a.user_id))
+    setSiteAssigneesError(null)
+    setShowEditSiteAssignees(true)
+    fetchSiteOrgMembers()
+  }
+
+  async function handleSaveSiteAssignees() {
+    if (!site) return
+    setSiteAssigneesSaving(true)
+    setSiteAssigneesError(null)
+    const supabase = createClient()
+
+    const { error: deleteError } = await supabase
+      .from('jobsite_assignees')
+      .delete()
+      .eq('jobsite_id', site.id)
+
+    if (deleteError) {
+      setSiteAssigneesSaving(false)
+      setSiteAssigneesError(deleteError.message)
+      return
+    }
+
+    if (editSiteAssigneeIds.length > 0) {
+      const rows = editSiteAssigneeIds.map((uid) => ({
+        jobsite_id: site.id,
+        user_id: uid,
+        org_id: site.org_id,
+      }))
+      const { error: insertError } = await supabase
+        .from('jobsite_assignees')
+        .insert(rows)
+
+      if (insertError) {
+        setSiteAssigneesSaving(false)
+        setSiteAssigneesError(insertError.message)
+        return
+      }
+    }
+
+    setSiteAssigneesSaving(false)
+    setShowEditSiteAssignees(false)
     fetchData()
   }
 
@@ -430,7 +499,14 @@ export default function SiteDetailPage() {
 
       {/* Tab content */}
       {activeTab === 'overview' && (
-        <OverviewTab site={site} serviceOrders={serviceOrders} visits={visits} equipment={equipment} />
+        <OverviewTab
+          site={site}
+          serviceOrders={serviceOrders}
+          visits={visits}
+          equipment={equipment}
+          siteAssignees={siteAssignees}
+          onEditAssignees={openEditSiteAssignees}
+        />
       )}
       {activeTab === 'service_orders' && (
         <ServiceOrdersTab
@@ -461,6 +537,48 @@ export default function SiteDetailPage() {
           onCancel={() => setShowAddOrder(false)}
         />
       </Modal>
+
+      {/* Edit Site Assignees Modal */}
+      {showEditSiteAssignees && (
+        <Modal
+          open={showEditSiteAssignees}
+          onClose={() => setShowEditSiteAssignees(false)}
+          title={`Assign Techs — ${site.name}`}
+          className="max-w-lg"
+        >
+          <div className="space-y-4">
+            {siteAssigneesError && (
+              <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{siteAssigneesError}</div>
+            )}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-sand-700">Assigned Techs</label>
+              <SiteTechMultiSelect
+                members={siteOrgMembers}
+                selected={editSiteAssigneeIds}
+                onChange={setEditSiteAssigneeIds}
+              />
+              <p className="mt-2 text-xs text-sand-500">
+                Techs assigned here will see this site on their mobile Sites tab.
+              </p>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-sand-100 pt-4">
+              <Button variant="secondary" onClick={() => setShowEditSiteAssignees(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveSiteAssignees} disabled={siteAssigneesSaving}>
+                {siteAssigneesSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Edit Service Order Modal */}
       {editOrder && (
@@ -561,11 +679,15 @@ function OverviewTab({
   serviceOrders,
   visits,
   equipment,
+  siteAssignees,
+  onEditAssignees,
 }: {
   site: Jobsite
   serviceOrders: ServiceOrder[]
   visits: Visit[]
   equipment: Equipment[]
+  siteAssignees: SiteAssigneeInfo[]
+  onEditAssignees: () => void
 }) {
   const activeOrders = serviceOrders.filter(
     (o) => !['completed', 'canceled', 'invoiced'].includes(o.status)
@@ -656,6 +778,46 @@ function OverviewTab({
               </div>
             </div>
           )}
+        </Card>
+
+        {/* Assigned Techs Card */}
+        <Card>
+          <div className="flex items-center justify-between">
+            <CardTitle>
+              <div className="flex items-center gap-2">
+                <User className="h-4 w-4 text-teal-500" />
+                Assigned Techs
+              </div>
+            </CardTitle>
+            <Button size="sm" variant="secondary" onClick={onEditAssignees}>
+              <Pencil className="h-3.5 w-3.5" />
+              Edit
+            </Button>
+          </div>
+          <div className="mt-4">
+            {siteAssignees.length === 0 ? (
+              <p className="text-sm text-sand-400">
+                No techs assigned. Click &quot;Edit&quot; to assign techs to this site.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {siteAssignees.map((a) => (
+                  <span
+                    key={a.user_id}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-teal-50 px-3 py-1 text-sm font-medium text-teal-700"
+                  >
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-teal-100 text-xs font-semibold text-teal-700">
+                      {a.full_name.charAt(0).toUpperCase()}
+                    </span>
+                    {a.full_name}
+                  </span>
+                ))}
+              </div>
+            )}
+            <p className="mt-3 text-xs text-sand-500">
+              Assigned techs will see this site on their mobile Sites tab.
+            </p>
+          </div>
         </Card>
       </div>
 
