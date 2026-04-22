@@ -158,6 +158,11 @@ export default function SiteDetailPage() {
 
   // Site assignees (techs assigned directly to the site)
   const [siteAssignees, setSiteAssignees] = useState<SiteAssigneeInfo[]>([])
+
+  // Edit site modal state
+  const [showEditSite, setShowEditSite] = useState(false)
+  const [editSiteSaving, setEditSiteSaving] = useState(false)
+  const [editSiteError, setEditSiteError] = useState<string | null>(null)
   const [showEditSiteAssignees, setShowEditSiteAssignees] = useState(false)
   const [editSiteAssigneeIds, setEditSiteAssigneeIds] = useState<string[]>([])
   const [siteAssigneesSaving, setSiteAssigneesSaving] = useState(false)
@@ -535,6 +540,11 @@ export default function SiteDetailPage() {
           equipment={equipment}
           siteAssignees={siteAssignees}
           onEditAssignees={openEditSiteAssignees}
+          onEditSite={() => {
+            setEditSiteError(null)
+            setShowEditSite(true)
+          }}
+          canManage={canManage}
         />
       )}
       {activeTab === 'activity' && (
@@ -591,6 +601,77 @@ export default function SiteDetailPage() {
             fetchData()
           }}
           onCancel={() => setShowAddOrder(false)}
+        />
+      </Modal>
+
+      {/* Edit Site Modal */}
+      <Modal
+        open={showEditSite}
+        onClose={() => !editSiteSaving && setShowEditSite(false)}
+        title="Edit Site"
+        className="max-w-xl"
+      >
+        <EditSiteForm
+          site={site}
+          saving={editSiteSaving}
+          error={editSiteError}
+          onCancel={() => setShowEditSite(false)}
+          onSave={async (fields) => {
+            setEditSiteSaving(true)
+            setEditSiteError(null)
+            const supabase = createClient()
+
+            // Re-geocode only if any address component changed.
+            const addrChanged =
+              fields.address_line1 !== site.address_line1 ||
+              fields.city !== site.city ||
+              fields.state !== site.state ||
+              fields.zip !== site.zip
+
+            const update: Record<string, unknown> = {
+              name: fields.name,
+              contact_name: fields.contact_name || null,
+              contact_email: fields.contact_email || null,
+              contact_phone: fields.contact_phone || null,
+              address_line1: fields.address_line1,
+              address_line2: fields.address_line2 || null,
+              city: fields.city,
+              state: fields.state,
+              zip: fields.zip,
+              access_notes: fields.access_notes || null,
+            }
+
+            if (addrChanged) {
+              try {
+                const coords = await geocodeAddress({
+                  address_line1: fields.address_line1,
+                  city: fields.city,
+                  state: fields.state,
+                  zip: fields.zip,
+                })
+                if (coords) {
+                  update.lat = coords.lat
+                  update.lng = coords.lng
+                  update.geocoded_at = new Date().toISOString()
+                }
+              } catch {
+                // non-fatal
+              }
+            }
+
+            const { error: updateErr } = await supabase
+              .from('jobsites')
+              .update(update)
+              .eq('id', id)
+
+            setEditSiteSaving(false)
+            if (updateErr) {
+              setEditSiteError(updateErr.message)
+              return
+            }
+            setShowEditSite(false)
+            await fetchData()
+          }}
         />
       </Modal>
 
@@ -750,6 +831,8 @@ function OverviewTab({
   equipment,
   siteAssignees,
   onEditAssignees,
+  onEditSite,
+  canManage,
 }: {
   site: Jobsite
   serviceOrders: ServiceOrder[]
@@ -757,6 +840,8 @@ function OverviewTab({
   equipment: Equipment[]
   siteAssignees: SiteAssigneeInfo[]
   onEditAssignees: () => void
+  onEditSite: () => void
+  canManage: boolean
 }) {
   const activeOrders = serviceOrders.filter(
     (o) => !['completed', 'canceled', 'invoiced'].includes(o.status)
@@ -769,12 +854,23 @@ function OverviewTab({
       <div className="space-y-5 lg:col-span-2">
         {/* Site Info Card */}
         <Card>
-          <CardTitle>
-            <div className="flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-teal-500" />
-              Site Information
-            </div>
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>
+              <div className="flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-teal-500" />
+                Site Information
+              </div>
+            </CardTitle>
+            {canManage && (
+              <button
+                onClick={onEditSite}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-sand-200 bg-white px-3 py-1.5 text-xs font-medium text-sand-700 transition-colors hover:bg-sand-50"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Edit
+              </button>
+            )}
+          </div>
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="rounded-lg bg-sand-50 p-3">
               <p className="text-xs font-medium uppercase tracking-wide text-sand-400">Address</p>
@@ -2749,4 +2845,114 @@ function formatDuration(ms: number): string {
   const hrs = Math.floor(mins / 60)
   const rem = mins % 60
   return rem > 0 ? `${hrs}h ${rem}m` : `${hrs}h`
+}
+
+type EditSiteFields = {
+  name: string
+  contact_name: string
+  contact_phone: string
+  contact_email: string
+  address_line1: string
+  address_line2: string
+  city: string
+  state: string
+  zip: string
+  access_notes: string
+}
+
+function EditSiteForm({
+  site,
+  saving,
+  error,
+  onCancel,
+  onSave,
+}: {
+  site: Jobsite
+  saving: boolean
+  error: string | null
+  onCancel: () => void
+  onSave: (fields: EditSiteFields) => Promise<void>
+}) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = new FormData(e.currentTarget)
+    await onSave({
+      name: (form.get('name') as string) ?? '',
+      contact_name: (form.get('contact_name') as string) ?? '',
+      contact_phone: (form.get('contact_phone') as string) ?? '',
+      contact_email: (form.get('contact_email') as string) ?? '',
+      address_line1: (form.get('address_line1') as string) ?? '',
+      address_line2: (form.get('address_line2') as string) ?? '',
+      city: (form.get('city') as string) ?? '',
+      state: (form.get('state') as string) ?? '',
+      zip: (form.get('zip') as string) ?? '',
+      access_notes: (form.get('access_notes') as string) ?? '',
+    })
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {error && (
+        <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>
+      )}
+      <div>
+        <label className="mb-1 block text-sm font-medium text-sand-700">Site Name *</label>
+        <Input name="name" required defaultValue={site.name ?? ''} />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="mb-1 block text-sm font-medium text-sand-700">Contact Name</label>
+          <Input name="contact_name" defaultValue={site.contact_name ?? ''} />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-sand-700">Contact Phone</label>
+          <Input name="contact_phone" defaultValue={site.contact_phone ?? ''} />
+        </div>
+      </div>
+      <div>
+        <label className="mb-1 block text-sm font-medium text-sand-700">Contact Email</label>
+        <Input name="contact_email" type="email" defaultValue={site.contact_email ?? ''} />
+      </div>
+      <div>
+        <label className="mb-1 block text-sm font-medium text-sand-700">Address *</label>
+        <Input name="address_line1" required defaultValue={site.address_line1 ?? ''} />
+      </div>
+      <div>
+        <label className="mb-1 block text-sm font-medium text-sand-700">Address Line 2</label>
+        <Input name="address_line2" defaultValue={site.address_line2 ?? ''} placeholder="Suite, unit, etc." />
+      </div>
+      <div className="grid grid-cols-3 gap-4">
+        <div>
+          <label className="mb-1 block text-sm font-medium text-sand-700">City *</label>
+          <Input name="city" required defaultValue={site.city ?? ''} />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-sand-700">State *</label>
+          <Input name="state" required defaultValue={site.state ?? 'AZ'} />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-sand-700">Zip *</label>
+          <Input name="zip" required defaultValue={site.zip ?? ''} />
+        </div>
+      </div>
+      <div>
+        <label className="mb-1 block text-sm font-medium text-sand-700">Access Notes</label>
+        <textarea
+          name="access_notes"
+          className="w-full rounded-lg border border-sand-300 px-3 py-2 text-sm"
+          rows={2}
+          defaultValue={site.access_notes ?? ''}
+          placeholder="Gate code, parking info..."
+        />
+      </div>
+      <div className="flex justify-end gap-3">
+        <Button type="button" variant="secondary" onClick={onCancel} disabled={saving}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={saving}>
+          {saving ? 'Saving...' : 'Save Changes'}
+        </Button>
+      </div>
+    </form>
+  )
 }
