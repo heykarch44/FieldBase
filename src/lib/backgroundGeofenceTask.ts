@@ -61,6 +61,36 @@ async function insertClockEvent(params: {
   }
 }
 
+// Fetch the user's last event at a specific site to decide whether a new
+// event is redundant (same type as the last) or a spurious exit (last
+// wasn't a clock_in, so nothing to close).
+async function fetchLastEventAtSite(params: {
+  userId: string;
+  jobsiteId: string;
+  accessToken: string;
+}): Promise<{ event_type: string } | null> {
+  try {
+    const url =
+      `${SUPABASE_URL}/rest/v1/time_clock_events` +
+      `?user_id=eq.${params.userId}` +
+      `&jobsite_id=eq.${params.jobsiteId}` +
+      `&select=event_type` +
+      `&order=occurred_at.desc` +
+      `&limit=1`;
+    const res = await fetch(url, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${params.accessToken}`,
+      },
+    });
+    if (!res.ok) return null;
+    const rows = (await res.json()) as Array<{ event_type: string }>;
+    return rows[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // Define the task at module-evaluation time so the OS can dispatch to it.
 TaskManager.defineTask<GeofenceTaskBody>(GEOFENCE_TASK, async ({ data, error }) => {
   if (error) {
@@ -79,6 +109,35 @@ TaskManager.defineTask<GeofenceTaskBody>(GEOFENCE_TASK, async ({ data, error }) 
 
   const clockEvent: "clock_in" | "clock_out" =
     eventType === Location.GeofencingEventType.Enter ? "clock_in" : "clock_out";
+
+  // iOS fires a synthetic state event for every registered region when
+  // startGeofencingAsync is called. If you're currently outside a region
+  // that gets registered, iOS emits Exit for it, which previously caused
+  // phantom clock_out rows for sites you were never at.
+  //
+  // Guard rails:
+  //   - Only write clock_out if the last event at that site was clock_in
+  //     (i.e. there's an open session to close).
+  //   - Only write clock_in if the last event at that site was NOT already
+  //     clock_in (avoid duplicate opens on reboot / re-registration).
+  const last = await fetchLastEventAtSite({
+    userId: session.userId,
+    jobsiteId: region.identifier,
+    accessToken: session.accessToken,
+  });
+
+  if (clockEvent === "clock_out") {
+    if (!last || last.event_type !== "clock_in") {
+      // Nothing to close — probably a synthetic exit on registration.
+      return;
+    }
+  } else {
+    // clock_in
+    if (last && last.event_type === "clock_in") {
+      // Already clocked in here — don't double-open.
+      return;
+    }
+  }
 
   await insertClockEvent({
     userId: session.userId,
