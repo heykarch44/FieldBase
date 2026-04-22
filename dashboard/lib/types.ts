@@ -117,12 +117,36 @@ export interface Jobsite {
   zip: string;
   lat: number | null;
   lng: number | null;
+  geofence_radius_m: number | null;
+  geocoded_at: string | null;
   access_notes: string | null;
   status: string;
   tags: string[];
   created_at: string;
   updated_at: string;
   assignees?: JobsiteAssignee[];
+}
+
+export interface TimeClockEvent {
+  id: string;
+  org_id: string;
+  user_id: string;
+  jobsite_id: string | null;
+  service_order_id: string | null;
+  visit_id: string | null;
+  event_type: 'clock_in' | 'clock_out';
+  source: 'auto_geofence' | 'manual';
+  occurred_at: string;
+  lat: number | null;
+  lng: number | null;
+  accuracy_m: number | null;
+  distance_from_site_m: number | null;
+  inside_geofence: boolean | null;
+  note: string | null;
+  photo_storage_path: string | null;
+  created_at: string;
+  user?: { id: string; full_name: string | null; email: string };
+  jobsite?: { id: string; name: string };
 }
 
 export interface Route {

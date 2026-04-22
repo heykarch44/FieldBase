@@ -117,6 +117,8 @@ export const JobsiteSchema = z.object({
   zip: z.string(),
   lat: z.number().nullable(),
   lng: z.number().nullable(),
+  geofence_radius_m: z.number().nullable().optional(),
+  geocoded_at: z.string().nullable().optional(),
   access_notes: z.string().nullable(),
   status: z.string(),
   tags: z.array(z.string()).default([]),

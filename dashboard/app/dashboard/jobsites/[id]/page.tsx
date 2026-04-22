@@ -13,7 +13,11 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Modal } from '@/components/ui/modal'
 import { formatDate, formatDateTime, capitalizeFirst, cn } from '@/lib/utils'
-import type { Jobsite, ServiceOrder, Visit, Equipment, UrgencyLevel, ServiceOrderStatus, SitePhoto } from '@/lib/types'
+import { geocodeAddress } from '@/lib/geocode'
+import dynamic_ from 'next/dynamic'
+import type { Jobsite, ServiceOrder, Visit, Equipment, UrgencyLevel, ServiceOrderStatus, SitePhoto, TimeClockEvent } from '@/lib/types'
+
+const GeofenceMap = dynamic_(() => import('@/components/GeofenceMap'), { ssr: false })
 import {
   ArrowLeft,
   MapPin,
@@ -53,7 +57,7 @@ import { NotesPanel } from '@/components/NotesPanel'
 // Types
 // ---------------------------------------------------------------------------
 
-type TabKey = 'overview' | 'service_orders' | 'visits' | 'notes' | 'photos' | 'documents' | 'equipment'
+type TabKey = 'overview' | 'service_orders' | 'visits' | 'notes' | 'photos' | 'documents' | 'equipment' | 'geofence' | 'time_clock'
 
 interface Tab {
   key: TabKey
@@ -75,6 +79,8 @@ const TABS: Tab[] = [
   { key: 'overview', label: 'Overview', icon: <Info className="h-4 w-4" /> },
   { key: 'service_orders', label: 'Service Orders', icon: <ClipboardList className="h-4 w-4" /> },
   { key: 'visits', label: 'Visits', icon: <Clock className="h-4 w-4" /> },
+  { key: 'geofence', label: 'Geofence', icon: <MapPin className="h-4 w-4" /> },
+  { key: 'time_clock', label: 'Time Clock', icon: <Clock className="h-4 w-4" /> },
   { key: 'notes', label: 'Notes', icon: <MessageSquare className="h-4 w-4" /> },
   { key: 'photos', label: 'Photos', icon: <ImageIcon className="h-4 w-4" /> },
   { key: 'documents', label: 'Documents', icon: <FileText className="h-4 w-4" /> },
@@ -551,6 +557,12 @@ export default function SiteDetailPage() {
       {activeTab === 'photos' && <PhotosTab orgId={activeOrgId} siteId={id} />}
       {activeTab === 'documents' && <DocumentsTab orgId={activeOrgId} siteId={id} />}
       {activeTab === 'equipment' && <EquipmentTab equipment={equipment} />}
+      {activeTab === 'geofence' && (
+        <GeofenceTab site={site} onSaved={fetchData} />
+      )}
+      {activeTab === 'time_clock' && (
+        <TimeClockTab siteId={id} />
+      )}
 
       {/* Add Service Order Modal */}
       <Modal
@@ -2339,4 +2351,390 @@ function AddServiceOrderForm({
       </div>
     </form>
   )
+}
+
+// ---------------------------------------------------------------------------
+// Tab: Geofence
+// ---------------------------------------------------------------------------
+
+function GeofenceTab({ site, onSaved }: { site: Jobsite; onSaved: () => void }) {
+  const [lat, setLat] = useState<number | null>(site.lat)
+  const [lng, setLng] = useState<number | null>(site.lng)
+  const [radius, setRadius] = useState<number>(site.geofence_radius_m ?? 100)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
+
+  async function handleGeocode() {
+    setBusy(true)
+    setError(null)
+    setInfo(null)
+    const result = await geocodeAddress({
+      address_line1: site.address_line1,
+      city: site.city,
+      state: site.state,
+      zip: site.zip,
+    })
+    if (!result) {
+      setBusy(false)
+      setError('No matching address found. Try editing the site address.')
+      return
+    }
+    setLat(result.lat)
+    setLng(result.lng)
+    setInfo('Location found. Click Save to persist.')
+    setBusy(false)
+  }
+
+  async function handleSave() {
+    if (lat == null || lng == null) {
+      setError('No coordinates to save. Geocode or set manually first.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    setInfo(null)
+    const supabase = createClient()
+    const { error: upErr } = await supabase
+      .from('jobsites')
+      .update({
+        lat,
+        lng,
+        geofence_radius_m: radius,
+        geocoded_at: new Date().toISOString(),
+      })
+      .eq('id', site.id)
+    setBusy(false)
+    if (upErr) {
+      setError(upErr.message)
+      return
+    }
+    setInfo('Geofence saved.')
+    onSaved()
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardTitle>
+          <div className="flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-teal-500" />
+            Geofence
+          </div>
+        </CardTitle>
+        <div className="mt-4 space-y-4">
+          {error && (
+            <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>
+          )}
+          {info && (
+            <div className="rounded-lg bg-teal-50 p-3 text-sm text-teal-700">{info}</div>
+          )}
+
+          {lat == null || lng == null ? (
+            <div className="flex flex-col items-center rounded-lg border border-dashed border-sand-300 bg-sand-50 p-8 text-center">
+              <MapPin className="mb-2 h-10 w-10 text-sand-300" />
+              <p className="text-sm font-medium text-sand-700">
+                This site has no coordinates yet.
+              </p>
+              <p className="mt-1 text-xs text-sand-500">
+                Use the button below to geocode from the site address.
+              </p>
+              <Button onClick={handleGeocode} disabled={busy} className="mt-4">
+                {busy ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Geocoding…
+                  </>
+                ) : (
+                  <>Geocode this address</>
+                )}
+              </Button>
+            </div>
+          ) : (
+            <>
+              <GeofenceMap lat={lat} lng={lng} radius={radius} />
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="rounded-lg bg-sand-50 p-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-sand-400">
+                    Coordinates
+                  </p>
+                  <p className="mt-1 text-sm font-mono text-sand-800">
+                    {lat.toFixed(6)}, {lng.toFixed(6)}
+                  </p>
+                  {site.geocoded_at && (
+                    <p className="mt-1 text-xs text-sand-400">
+                      Geocoded {formatDateTime(site.geocoded_at)}
+                    </p>
+                  )}
+                </div>
+                <div className="rounded-lg bg-sand-50 p-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-sand-400">
+                    Radius
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-sand-800">
+                    {radius} m
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-sand-700">
+                  Geofence radius ({radius}m)
+                </label>
+                <input
+                  type="range"
+                  min={25}
+                  max={500}
+                  step={5}
+                  value={radius}
+                  onChange={(e) => setRadius(parseInt(e.target.value, 10))}
+                  className="w-full accent-teal-600"
+                />
+                <div className="mt-1 flex justify-between text-xs text-sand-400">
+                  <span>25m</span>
+                  <span>500m</span>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 border-t border-sand-100 pt-4">
+                <Button onClick={handleSave} disabled={busy}>
+                  {busy ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" /> Saving…
+                    </>
+                  ) : (
+                    'Save Geofence'
+                  )}
+                </Button>
+                <Button variant="secondary" onClick={handleGeocode} disabled={busy}>
+                  Recalculate from address
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Tab: Time Clock
+// ---------------------------------------------------------------------------
+
+interface TimeClockEventRow extends TimeClockEvent {
+  user?: { id: string; full_name: string | null; email: string }
+}
+
+function TimeClockTab({ siteId }: { siteId: string }) {
+  const [events, setEvents] = useState<TimeClockEventRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [startDate, setStartDate] = useState<string>(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 14)
+    return d.toISOString().slice(0, 10)
+  })
+  const [endDate, setEndDate] = useState<string>(() =>
+    new Date().toISOString().slice(0, 10)
+  )
+
+  const fetchEvents = useCallback(async () => {
+    setLoading(true)
+    const supabase = createClient()
+    const startIso = new Date(`${startDate}T00:00:00`).toISOString()
+    const endIso = new Date(`${endDate}T23:59:59`).toISOString()
+    const { data } = await supabase
+      .from('time_clock_events')
+      .select('*, user:users!time_clock_events_user_id_fkey(id, full_name, email)')
+      .eq('jobsite_id', siteId)
+      .gte('occurred_at', startIso)
+      .lte('occurred_at', endIso)
+      .order('occurred_at', { ascending: false })
+    setEvents((data ?? []) as TimeClockEventRow[])
+    setLoading(false)
+  }, [siteId, startDate, endDate])
+
+  useEffect(() => {
+    fetchEvents()
+  }, [fetchEvents])
+
+  // Compute session durations: pair consecutive clock_in → clock_out per user
+  const sessions = computeSessions(events)
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-sand-600">From</label>
+          <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-sand-600">To</label>
+          <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+        </div>
+      </div>
+
+      {loading ? (
+        <Card>
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-5 w-5 animate-spin text-teal-600" />
+          </div>
+        </Card>
+      ) : events.length === 0 ? (
+        <Card>
+          <div className="flex flex-col items-center py-12 text-center">
+            <Clock className="mb-3 h-10 w-10 text-sand-300" />
+            <p className="font-medium text-sand-600">No clock events in this range</p>
+          </div>
+        </Card>
+      ) : (
+        <>
+          {sessions.length > 0 && (
+            <div className="overflow-hidden rounded-xl border border-sand-200 bg-white">
+              <div className="border-b border-sand-100 bg-sand-50/50 px-4 py-2 text-xs font-semibold uppercase text-sand-500">
+                Sessions
+              </div>
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-sand-100 bg-sand-50/30">
+                    <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-sand-500">Tech</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-sand-500">Clock In</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-sand-500">Clock Out</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-sand-500">Duration</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sessions.map((s, i) => (
+                    <tr key={i} className="border-b border-sand-50">
+                      <td className="px-4 py-2 text-sm text-sand-800">{s.userName}</td>
+                      <td className="px-4 py-2 text-sm text-sand-600">{formatDateTime(s.clockIn)}</td>
+                      <td className="px-4 py-2 text-sm text-sand-600">
+                        {s.clockOut ? formatDateTime(s.clockOut) : <Badge variant="green">Active</Badge>}
+                      </td>
+                      <td className="px-4 py-2 text-sm text-sand-800">{formatDuration(s.durationMs)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="overflow-hidden rounded-xl border border-sand-200 bg-white">
+            <div className="border-b border-sand-100 bg-sand-50/50 px-4 py-2 text-xs font-semibold uppercase text-sand-500">
+              All Events
+            </div>
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-sand-100 bg-sand-50/30">
+                  <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-sand-500">Tech</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-sand-500">Event</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-sand-500">Time</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-sand-500">Source</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-sand-500">Distance</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-sand-500">Note</th>
+                </tr>
+              </thead>
+              <tbody>
+                {events.map((ev) => (
+                  <tr key={ev.id} className="border-b border-sand-50">
+                    <td className="px-4 py-2 text-sm text-sand-800">
+                      {ev.user?.full_name ?? ev.user?.email ?? '—'}
+                    </td>
+                    <td className="px-4 py-2">
+                      <Badge variant={ev.event_type === 'clock_in' ? 'green' : 'gray'}>
+                        {ev.event_type === 'clock_in' ? 'Clock In' : 'Clock Out'}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-2 text-sm text-sand-600">
+                      {formatDateTime(ev.occurred_at)}
+                    </td>
+                    <td className="px-4 py-2">
+                      <Badge variant={ev.source === 'auto_geofence' ? 'teal' : 'amber'}>
+                        {ev.source === 'auto_geofence' ? 'Auto' : 'Manual'}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-2 text-sm text-sand-600">
+                      {ev.distance_from_site_m != null
+                        ? `${Math.round(ev.distance_from_site_m)}m`
+                        : '—'}
+                    </td>
+                    <td className="px-4 py-2 text-sm text-sand-500 max-w-[240px] truncate">
+                      {ev.note ?? (ev.photo_storage_path ? '📷 photo' : '—')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+interface Session {
+  userId: string
+  userName: string
+  clockIn: string
+  clockOut: string | null
+  durationMs: number
+}
+
+function computeSessions(events: TimeClockEventRow[]): Session[] {
+  // events are newest-first. Walk oldest-first per user, pair ins with next outs.
+  const byUser: Record<string, TimeClockEventRow[]> = {}
+  for (const ev of events) {
+    if (!byUser[ev.user_id]) byUser[ev.user_id] = []
+    byUser[ev.user_id].push(ev)
+  }
+  const out: Session[] = []
+  for (const uid of Object.keys(byUser)) {
+    const sorted = [...byUser[uid]].sort(
+      (a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime()
+    )
+    let openIn: TimeClockEventRow | null = null
+    for (const ev of sorted) {
+      if (ev.event_type === 'clock_in') {
+        if (openIn) {
+          out.push({
+            userId: uid,
+            userName: openIn.user?.full_name ?? openIn.user?.email ?? 'Unknown',
+            clockIn: openIn.occurred_at,
+            clockOut: null,
+            durationMs: Date.now() - new Date(openIn.occurred_at).getTime(),
+          })
+        }
+        openIn = ev
+      } else if (ev.event_type === 'clock_out' && openIn) {
+        out.push({
+          userId: uid,
+          userName: openIn.user?.full_name ?? openIn.user?.email ?? 'Unknown',
+          clockIn: openIn.occurred_at,
+          clockOut: ev.occurred_at,
+          durationMs:
+            new Date(ev.occurred_at).getTime() - new Date(openIn.occurred_at).getTime(),
+        })
+        openIn = null
+      }
+    }
+    if (openIn) {
+      out.push({
+        userId: uid,
+        userName: openIn.user?.full_name ?? openIn.user?.email ?? 'Unknown',
+        clockIn: openIn.occurred_at,
+        clockOut: null,
+        durationMs: Date.now() - new Date(openIn.occurred_at).getTime(),
+      })
+    }
+  }
+  return out.sort((a, b) => new Date(b.clockIn).getTime() - new Date(a.clockIn).getTime())
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 0) return '—'
+  const mins = Math.round(ms / 60000)
+  if (mins < 60) return `${mins}m`
+  const hrs = Math.floor(mins / 60)
+  const rem = mins % 60
+  return rem > 0 ? `${hrs}h ${rem}m` : `${hrs}h`
 }

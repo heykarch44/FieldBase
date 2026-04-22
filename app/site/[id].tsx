@@ -29,6 +29,7 @@ import { useSiteDocuments, getSignedDocumentUrl } from "../../src/hooks/useSiteD
 import type { SiteDocument } from "../../src/hooks/useSiteDocuments";
 import { PhotoViewer } from "../../src/components/PhotoViewer";
 import { NotesSection } from "../../src/components/NotesSection";
+import { TimeClockCard } from "../../src/components/TimeClockCard";
 import type {
   Jobsite,
   ServiceOrder,
@@ -487,6 +488,17 @@ export default function SiteDetailScreen() {
             </View>
           )}
         </Card>
+
+        {/* Time Clock */}
+        <TimeClockCard
+          jobsiteId={id}
+          siteLat={site.lat}
+          siteLng={site.lng}
+          radius={
+            (site as unknown as { geofence_radius_m?: number | null })
+              .geofence_radius_m ?? 100
+          }
+        />
 
         {/* Service orders */}
         <View style={styles.sectionHeader}>

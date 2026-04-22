@@ -3,6 +3,10 @@ import { Session } from "@supabase/supabase-js";
 import * as LocalAuthentication from "expo-local-authentication";
 import * as SecureStore from "expo-secure-store";
 import { supabase } from "../lib/supabase";
+import {
+  clearSessionCache,
+  writeSessionCache,
+} from "../lib/sessionCache";
 import type { User, OrgMember } from "../types/database";
 
 interface AuthState {
@@ -75,6 +79,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const result = await fetchUserProfile(session.user.id);
         user = result.user;
         memberships = result.memberships;
+        // Cache for background geofence task
+        if (session.access_token) {
+          await writeSessionCache({
+            userId: session.user.id,
+            orgId: user?.active_org_id ?? null,
+            accessToken: session.access_token,
+            refreshToken: session.refresh_token ?? null,
+          });
+        }
       }
 
       if (mounted) {
@@ -99,6 +112,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const result = await fetchUserProfile(session.user.id);
           user = result.user;
           memberships = result.memberships;
+          if (session.access_token) {
+            await writeSessionCache({
+              userId: session.user.id,
+              orgId: user?.active_org_id ?? null,
+              accessToken: session.access_token,
+              refreshToken: session.refresh_token ?? null,
+            });
+          }
+        } else {
+          await clearSessionCache();
         }
         if (mounted) {
           setState((prev) => ({ ...prev, session, user, memberships, loading: false }));
@@ -120,6 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
+    await clearSessionCache();
     setState((prev) => ({ ...prev, session: null, user: null, memberships: [] }));
   }, []);
 

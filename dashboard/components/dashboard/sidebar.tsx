@@ -20,6 +20,7 @@ import {
   Building,
   ChevronsUpDown,
   Shield,
+  Clock,
 } from 'lucide-react'
 
 const navItems = [
@@ -28,6 +29,7 @@ const navItems = [
   { href: '/dashboard/service-orders', label: 'Service Orders', icon: ClipboardList },
   { href: '/dashboard/routes', label: 'Routes', icon: MapPin },
   { href: '/dashboard/technicians', label: 'Technicians', icon: HardHat },
+  { href: '/dashboard/time-clock', label: 'Time Clock', icon: Clock },
   { href: '/dashboard/reports', label: 'Reports', icon: BarChart3 },
 ]
 

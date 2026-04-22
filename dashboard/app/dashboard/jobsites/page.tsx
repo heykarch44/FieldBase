@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { geocodeAddress } from '@/lib/geocode'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -470,16 +471,39 @@ function AddJobsiteForm({
     const form = new FormData(e.currentTarget)
     const supabase = createClient()
 
+    const address_line1 = form.get('address_line1') as string
+    const city = form.get('city') as string
+    const state = form.get('state') as string
+    const zip = form.get('zip') as string
+
+    // Best-effort geocode before insert. Failure is non-fatal.
+    let lat: number | null = null
+    let lng: number | null = null
+    let geocoded_at: string | null = null
+    try {
+      const coords = await geocodeAddress({ address_line1, city, state, zip })
+      if (coords) {
+        lat = coords.lat
+        lng = coords.lng
+        geocoded_at = new Date().toISOString()
+      }
+    } catch {
+      // ignore — user can geocode manually from the site page
+    }
+
     const { error: insertError } = await supabase.from('jobsites').insert({
       org_id: orgId,
       name: form.get('name') as string,
       contact_name: (form.get('contact_name') as string) || null,
       contact_email: (form.get('contact_email') as string) || null,
       contact_phone: (form.get('contact_phone') as string) || null,
-      address_line1: form.get('address_line1') as string,
-      city: form.get('city') as string,
-      state: form.get('state') as string,
-      zip: form.get('zip') as string,
+      address_line1,
+      city,
+      state,
+      zip,
+      lat,
+      lng,
+      geocoded_at,
       status: 'active',
       access_notes: (form.get('access_notes') as string) || null,
     })
