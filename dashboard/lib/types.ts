@@ -213,12 +213,27 @@ export interface ServiceOrder {
   scheduled_date: string | null;
   completed_at: string | null;
   tags: string[];
+  service_order_type_id: string | null;
+  requires_signature: boolean;
   created_at: string;
   updated_at: string;
   jobsite?: Jobsite;
   assignee?: User;
   requester?: User;
   assignees?: ServiceOrderAssignee[];
+  service_order_type?: ServiceOrderType | null;
+}
+
+export interface ServiceOrderType {
+  id: string;
+  org_id: string;
+  label: string;
+  color_key: string;
+  requires_signature_default: boolean;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Photo {

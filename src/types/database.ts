@@ -178,6 +178,20 @@ export const ServiceOrderSchema = z.object({
   scheduled_date: z.string().nullable(),
   completed_at: z.string().nullable(),
   tags: z.array(z.string()).default([]),
+  service_order_type_id: z.string().uuid().nullable().optional(),
+  requires_signature: z.boolean().optional().default(false),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export const ServiceOrderTypeSchema = z.object({
+  id: z.string().uuid(),
+  org_id: z.string().uuid(),
+  label: z.string(),
+  color_key: z.string(),
+  requires_signature_default: z.boolean(),
+  sort_order: z.number(),
+  is_active: z.boolean(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -307,6 +321,7 @@ export type Jobsite = z.infer<typeof JobsiteSchema>;
 export type Route = z.infer<typeof RouteSchema>;
 export type Visit = z.infer<typeof VisitSchema>;
 export type ServiceOrder = z.infer<typeof ServiceOrderSchema>;
+export type ServiceOrderType = z.infer<typeof ServiceOrderTypeSchema>;
 export type Photo = z.infer<typeof PhotoSchema>;
 export type Document = z.infer<typeof DocumentSchema>;
 export type Signature = z.infer<typeof SignatureSchema>;

@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Card, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Settings, User, Shield, Bell, Layers } from 'lucide-react'
+import { Settings, User, Shield, Bell, Layers, Wrench } from 'lucide-react'
 
 interface UserProfile {
   id: string
@@ -111,6 +111,25 @@ export default function SettingsPage() {
               </p>
               <Button onClick={() => router.push('/dashboard/settings/fields')}>
                 Manage Fields
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Service Types */}
+        <Card>
+          <CardTitle>
+            <Wrench className="inline h-4 w-4 mr-2" />
+            Service Types
+          </CardTitle>
+          <CardContent>
+            <div className="space-y-4 text-sm">
+              <p className="text-sand-600">
+                Configure the types of service orders your team handles and which
+                require customer signatures by default.
+              </p>
+              <Button onClick={() => router.push('/dashboard/settings/service-types')}>
+                Manage Service Types
               </Button>
             </div>
           </CardContent>

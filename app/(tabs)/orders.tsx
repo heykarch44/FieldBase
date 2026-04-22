@@ -20,6 +20,7 @@ import { Card } from "../../src/components/Card";
 import { EmptyState } from "../../src/components/EmptyState";
 import { NotesSection } from "../../src/components/NotesSection";
 import { ActivityFeed } from "../../src/components/ActivityFeed";
+import { OrderSignatureSection } from "../../src/components/OrderSignatureSection";
 import { Colors, UrgencyColors } from "../../src/constants/theme";
 
 const URGENCY_LABELS: Record<string, { label: string; bg: string; text: string }> = {
@@ -126,6 +127,12 @@ export default function OrdersScreen() {
                 <Text style={styles.dateText}>{formatDate(item.scheduled_date)}</Text>
               </View>
             )}
+            {item.requires_signature && (
+              <View style={styles.sigReqBadge}>
+                <Ionicons name="create-outline" size={11} color={Colors.primary[700]} />
+                <Text style={styles.sigReqText}>Signature</Text>
+              </View>
+            )}
           </View>
 
           {/* Expanded details */}
@@ -137,6 +144,14 @@ export default function OrdersScreen() {
                   <Text style={styles.descriptionText}>{item.description}</Text>
                 </View>
               )}
+
+              {/* Signature */}
+              <View style={styles.signatureWrap}>
+                <OrderSignatureSection
+                  serviceOrderId={item.id}
+                  requiresSignature={item.requires_signature ?? false}
+                />
+              </View>
 
               {/* Details grid */}
               <View style={styles.detailsGrid}>
@@ -476,5 +491,22 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: "#f3f4f6",
+  },
+  signatureWrap: {
+    marginBottom: 12,
+  },
+  sigReqBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    backgroundColor: Colors.primary[50],
+  },
+  sigReqText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: Colors.primary[700],
   },
 });

@@ -23,10 +23,28 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core'
-import { ClipboardList, Loader2, X, Check, ChevronDown } from 'lucide-react'
-import type { ServiceOrder, ServiceOrderStatus, UrgencyLevel } from '@/lib/types'
+import { ClipboardList, Loader2, X, Check, ChevronDown, PenLine, CheckCircle2, AlertTriangle } from 'lucide-react'
+import type { ServiceOrder, ServiceOrderStatus, ServiceOrderType, Signature, UrgencyLevel } from '@/lib/types'
 import { NotesPanel } from '@/components/NotesPanel'
 import { ActivityFeed } from '@/components/ActivityFeed'
+
+const SERVICE_TYPE_COLOR_CLASSES: Record<string, { bg: string; text: string; swatch: string }> = {
+  teal:   { bg: 'bg-teal-50',   text: 'text-teal-700',   swatch: 'bg-teal-500' },
+  red:    { bg: 'bg-red-50',    text: 'text-red-700',    swatch: 'bg-red-500' },
+  orange: { bg: 'bg-orange-50', text: 'text-orange-700', swatch: 'bg-orange-500' },
+  amber:  { bg: 'bg-amber-50',  text: 'text-amber-700',  swatch: 'bg-amber-500' },
+  yellow: { bg: 'bg-yellow-50', text: 'text-yellow-700', swatch: 'bg-yellow-500' },
+  green:  { bg: 'bg-green-50',  text: 'text-green-700',  swatch: 'bg-green-500' },
+  blue:   { bg: 'bg-blue-50',   text: 'text-blue-700',   swatch: 'bg-blue-500' },
+  purple: { bg: 'bg-purple-50', text: 'text-purple-700', swatch: 'bg-purple-500' },
+  pink:   { bg: 'bg-pink-50',   text: 'text-pink-700',   swatch: 'bg-pink-500' },
+  slate:  { bg: 'bg-slate-50',  text: 'text-slate-700',  swatch: 'bg-slate-500' },
+}
+
+function serviceTypeColor(color: string | null | undefined) {
+  if (color && SERVICE_TYPE_COLOR_CLASSES[color]) return SERVICE_TYPE_COLOR_CLASSES[color]
+  return SERVICE_TYPE_COLOR_CLASSES.slate
+}
 
 interface OrgMember {
   user_id: string
@@ -220,10 +238,14 @@ function DroppableColumn({
 function DraggableCard({
   order,
   assigneeNames,
+  serviceType,
+  hasSignature,
   onSelect,
 }: {
   order: ServiceOrder
   assigneeNames: string[]
+  serviceType: ServiceOrderType | null
+  hasSignature: boolean
   onSelect: (o: ServiceOrder) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
@@ -253,13 +275,37 @@ function DraggableCard({
           {order.title}
         </span>
       </div>
-      <span
-        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-          urgencyColor[order.urgency]
-        }`}
-      >
-        {order.urgency}
-      </span>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span
+          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+            urgencyColor[order.urgency]
+          }`}
+        >
+          {order.urgency}
+        </span>
+        {serviceType && (
+          <span
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+              serviceTypeColor(serviceType.color_key).bg
+            } ${serviceTypeColor(serviceType.color_key).text}`}
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${serviceTypeColor(serviceType.color_key).swatch}`} />
+            {serviceType.label}
+          </span>
+        )}
+        {order.requires_signature && !hasSignature && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+            <AlertTriangle className="h-3 w-3" />
+            Signature pending
+          </span>
+        )}
+        {hasSignature && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+            <CheckCircle2 className="h-3 w-3" />
+            Signed
+          </span>
+        )}
+      </div>
       {(order as unknown as { jobsite?: { name: string } }).jobsite?.name ? (
         <p className="mt-1 text-xs text-sand-500">
           {(order as unknown as { jobsite: { name: string } }).jobsite.name}
@@ -300,6 +346,13 @@ export default function ServiceOrdersPage() {
   // Assignees map: service_order_id -> AssigneeInfo[]
   const [assigneesMap, setAssigneesMap] = useState<Record<string, AssigneeInfo[]>>({})
 
+  // Service order types (for display + dropdown)
+  const [serviceTypes, setServiceTypes] = useState<ServiceOrderType[]>([])
+
+  // Signatures map: service_order_id -> Signature[]
+  const [signaturesMap, setSignaturesMap] = useState<Record<string, Signature[]>>({})
+  const [signatureUrls, setSignatureUrls] = useState<Record<string, string>>({})
+
   // Edit form state
   const [editTitle, setEditTitle] = useState('')
   const [editDescription, setEditDescription] = useState('')
@@ -309,6 +362,9 @@ export default function ServiceOrdersPage() {
   const [editStatus, setEditStatus] = useState('pending')
   const [editEstimatedCost, setEditEstimatedCost] = useState('')
   const [editActualCost, setEditActualCost] = useState('')
+  const [editServiceTypeId, setEditServiceTypeId] = useState<string>('')
+  const [editRequiresSignature, setEditRequiresSignature] = useState<boolean>(false)
+  const [viewingSignatureUrl, setViewingSignatureUrl] = useState<string | null>(null)
   const [orgMembers, setOrgMembers] = useState<OrgMember[]>([])
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -339,7 +395,7 @@ export default function ServiceOrdersPage() {
     const fetchedOrders = (ordersData ?? []) as ServiceOrder[]
     setOrders(fetchedOrders)
 
-    // Fetch all assignees for these orders
+    // Fetch all assignees + signatures for these orders
     if (fetchedOrders.length > 0) {
       const orderIds = fetchedOrders.map((o) => o.id)
       const { data: assigneesData } = await supabase
@@ -358,14 +414,38 @@ export default function ServiceOrdersPage() {
         }
       }
       setAssigneesMap(map)
+
+      const { data: sigData } = await supabase
+        .from('signatures')
+        .select('*')
+        .eq('entity_type', 'service_order')
+        .in('entity_id', orderIds)
+        .order('signed_at', { ascending: false })
+
+      const sigMap: Record<string, Signature[]> = {}
+      for (const row of (sigData ?? []) as Signature[]) {
+        if (!sigMap[row.entity_id]) sigMap[row.entity_id] = []
+        sigMap[row.entity_id].push(row)
+      }
+      setSignaturesMap(sigMap)
     }
 
     setLoading(false)
   }, [])
 
+  const fetchServiceTypes = useCallback(async () => {
+    const supabase = createClient()
+    const { data } = await supabase
+      .from('service_order_types')
+      .select('*')
+      .order('sort_order', { ascending: true })
+    setServiceTypes((data ?? []) as ServiceOrderType[])
+  }, [])
+
   useEffect(() => {
     fetchOrders()
-  }, [fetchOrders])
+    fetchServiceTypes()
+  }, [fetchOrders, fetchServiceTypes])
 
   useEffect(() => {
     (async () => {
@@ -425,6 +505,8 @@ export default function ServiceOrdersPage() {
     setEditStatus(order.status)
     setEditEstimatedCost(order.estimated_cost != null ? String(order.estimated_cost) : '')
     setEditActualCost(order.actual_cost != null ? String(order.actual_cost) : '')
+    setEditServiceTypeId(order.service_order_type_id ?? '')
+    setEditRequiresSignature(order.requires_signature ?? false)
     setSaveError(null)
 
     // Load currently assigned tech IDs
@@ -432,6 +514,34 @@ export default function ServiceOrdersPage() {
     setEditAssignedIds(currentAssignees.map((a) => a.user_id))
 
     fetchOrgMembers()
+    loadSignatureUrls(order.id)
+  }
+
+  async function loadSignatureUrls(orderId: string) {
+    const sigs = signaturesMap[orderId] ?? []
+    if (sigs.length === 0) return
+    const supabase = createClient()
+    const updates: Record<string, string> = {}
+    await Promise.all(
+      sigs.map(async (s) => {
+        if (signatureUrls[s.id]) return
+        const { data } = await supabase.storage
+          .from('signatures')
+          .createSignedUrl(s.signature_url, 3600)
+        if (data?.signedUrl) updates[s.id] = data.signedUrl
+      })
+    )
+    if (Object.keys(updates).length > 0) {
+      setSignatureUrls((prev) => ({ ...prev, ...updates }))
+    }
+  }
+
+  function handleTypeChange(newTypeId: string) {
+    setEditServiceTypeId(newTypeId)
+    if (newTypeId) {
+      const t = serviceTypes.find((x) => x.id === newTypeId)
+      if (t) setEditRequiresSignature(t.requires_signature_default)
+    }
   }
 
   async function handleSave() {
@@ -453,6 +563,8 @@ export default function ServiceOrdersPage() {
         status: editStatus,
         estimated_cost: editEstimatedCost ? parseFloat(editEstimatedCost) : null,
         actual_cost: editActualCost ? parseFloat(editActualCost) : null,
+        service_order_type_id: editServiceTypeId || null,
+        requires_signature: editRequiresSignature,
         updated_at: new Date().toISOString(),
       })
       .eq('id', selectedOrder.id)
@@ -570,14 +682,20 @@ export default function ServiceOrdersPage() {
                 label={col.label}
                 count={colOrders.length}
               >
-                {colOrders.map((order) => (
-                  <DraggableCard
-                    key={order.id}
-                    order={order}
-                    assigneeNames={(assigneesMap[order.id] ?? []).map((a) => a.full_name)}
-                    onSelect={openEditModal}
-                  />
-                ))}
+                {colOrders.map((order) => {
+                  const st = serviceTypes.find((t) => t.id === order.service_order_type_id) ?? null
+                  const hasSig = (signaturesMap[order.id] ?? []).length > 0
+                  return (
+                    <DraggableCard
+                      key={order.id}
+                      order={order}
+                      assigneeNames={(assigneesMap[order.id] ?? []).map((a) => a.full_name)}
+                      serviceType={st}
+                      hasSignature={hasSig}
+                      onSelect={openEditModal}
+                    />
+                  )
+                })}
               </DroppableColumn>
             )
           })}
@@ -672,6 +790,54 @@ export default function ServiceOrdersPage() {
               />
             </div>
 
+            {/* Service Type */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-sand-700">Service Type</label>
+              <select
+                value={editServiceTypeId}
+                onChange={(e) => handleTypeChange(e.target.value)}
+                className="w-full rounded-lg border border-sand-300 bg-white px-3 py-2 text-sm text-sand-900 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+              >
+                <option value="">— None —</option>
+                {serviceTypes
+                  .filter((t) => t.is_active || t.id === editServiceTypeId)
+                  .map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.label} ({t.color_key})
+                    </option>
+                  ))}
+              </select>
+              {editServiceTypeId && (() => {
+                const t = serviceTypes.find((x) => x.id === editServiceTypeId)
+                if (!t) return null
+                const c = serviceTypeColor(t.color_key)
+                return (
+                  <div className="mt-1.5">
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${c.bg} ${c.text}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${c.swatch}`} />
+                      {t.label}
+                    </span>
+                  </div>
+                )
+              })()}
+            </div>
+
+            {/* Requires signature */}
+            <label className="flex items-start gap-2 rounded-lg border border-sand-200 p-3">
+              <input
+                type="checkbox"
+                checked={editRequiresSignature}
+                onChange={(e) => setEditRequiresSignature(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-sand-300 text-teal-600 focus:ring-teal-500"
+              />
+              <span className="text-sm">
+                <span className="font-medium text-sand-800">Requires customer signature</span>
+                <span className="block text-xs text-sand-500">
+                  Auto-set from service type default. Override if needed.
+                </span>
+              </span>
+            </label>
+
             {/* Urgency + Status */}
             <div className="grid grid-cols-2 gap-4">
               <Select
@@ -733,6 +899,66 @@ export default function ServiceOrdersPage() {
               </Button>
             </div>
 
+            {/* Signatures Panel */}
+            <div className="border-t border-sand-100 pt-4">
+              <div className="mb-2 flex items-center gap-2">
+                <PenLine className="h-4 w-4 text-sand-500" />
+                <h3 className="text-sm font-semibold text-sand-800">Signatures</h3>
+              </div>
+              {(signaturesMap[selectedOrder.id] ?? []).length === 0 ? (
+                <p className="rounded-lg bg-sand-50 p-3 text-xs text-sand-500">
+                  {selectedOrder.requires_signature
+                    ? 'No signature captured yet. Techs can capture from the mobile app.'
+                    : 'No signatures on this order.'}
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {(signaturesMap[selectedOrder.id] ?? []).map((s) => {
+                    const url = signatureUrls[s.id]
+                    return (
+                      <div
+                        key={s.id}
+                        className="flex items-center gap-3 rounded-lg border border-sand-200 bg-white p-3"
+                      >
+                        {url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={url}
+                            alt={`Signature from ${s.signer_name}`}
+                            onClick={() => setViewingSignatureUrl(url)}
+                            className="h-14 w-24 cursor-pointer rounded border border-sand-200 bg-white object-contain p-1"
+                          />
+                        ) : (
+                          <div className="flex h-14 w-24 items-center justify-center rounded border border-sand-200 bg-sand-50">
+                            <Loader2 className="h-4 w-4 animate-spin text-sand-400" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-sand-900">{s.signer_name}</p>
+                          <p className="text-xs text-sand-500">
+                            Signed {new Date(s.signed_at).toLocaleString()}
+                          </p>
+                          {s.signer_role && (
+                            <span className="mt-1 inline-flex rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-semibold text-teal-700">
+                              {s.signer_role}
+                            </span>
+                          )}
+                        </div>
+                        {url && (
+                          <button
+                            onClick={() => setViewingSignatureUrl(url)}
+                            className="rounded-md px-2 py-1 text-xs font-medium text-teal-700 hover:bg-teal-50"
+                          >
+                            View
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
             {/* Notes Panel */}
             {selectedOrder.jobsite_id && (
               <div className="border-t border-sand-100 pt-4">
@@ -761,6 +987,22 @@ export default function ServiceOrdersPage() {
               </div>
             )}
           </div>
+        </Modal>
+      )}
+
+      {viewingSignatureUrl && (
+        <Modal
+          open={!!viewingSignatureUrl}
+          onClose={() => setViewingSignatureUrl(null)}
+          title="Signature"
+          className="max-w-2xl"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={viewingSignatureUrl}
+            alt="Signature"
+            className="w-full rounded-lg border border-sand-200 bg-white p-4"
+          />
         </Modal>
       )}
     </div>
