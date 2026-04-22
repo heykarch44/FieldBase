@@ -65,6 +65,8 @@ export default function OrdersScreen() {
     if (url) Linking.openURL(url);
   };
 
+  const today = new Date().toISOString().split("T")[0];
+
   const renderOrder = ({
     item,
     section,
@@ -78,6 +80,9 @@ export default function OrdersScreen() {
     const address = item.jobsite
       ? `${item.jobsite.address_line1}, ${item.jobsite.city}`
       : null;
+    const isOpen = !["completed", "invoiced", "canceled"].includes(item.status);
+    const isOverdue =
+      isOpen && !!item.scheduled_date && item.scheduled_date < today;
 
     return (
       <TouchableOpacity
@@ -122,9 +127,21 @@ export default function OrdersScreen() {
               </Text>
             </View>
             {item.scheduled_date && (
-              <View style={styles.dateChip}>
-                <Ionicons name="calendar-outline" size={12} color={Colors.gray[500]} />
-                <Text style={styles.dateText}>{formatDate(item.scheduled_date)}</Text>
+              <View style={[styles.dateChip, isOverdue && styles.dateChipOverdue]}>
+                <Ionicons
+                  name="calendar-outline"
+                  size={12}
+                  color={isOverdue ? "#991b1b" : Colors.gray[500]}
+                />
+                <Text style={[styles.dateText, isOverdue && styles.dateTextOverdue]}>
+                  {formatDate(item.scheduled_date)}
+                </Text>
+              </View>
+            )}
+            {isOverdue && (
+              <View style={styles.overdueBadge}>
+                <Ionicons name="alert-circle" size={12} color="#fff" />
+                <Text style={styles.overdueText}>Overdue</Text>
               </View>
             )}
             {item.requires_signature && (
@@ -413,6 +430,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.gray[500],
     fontWeight: "500",
+  },
+  dateChipOverdue: {
+    // row stays the same; color handled on icon + text
+  },
+  dateTextOverdue: {
+    color: "#991b1b",
+    fontWeight: "700",
+  },
+  overdueBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#dc2626",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  overdueText: {
+    fontSize: 11,
+    color: "#fff",
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
   },
   expandedSection: {
     marginTop: 12,
