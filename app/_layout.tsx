@@ -13,7 +13,21 @@ import { useGeofencePermissions } from "../src/hooks/useGeofencePermissions";
 
 function GeofenceBootstrap({ children }: { children: React.ReactNode }) {
   const { session } = useAuth();
-  const { background } = useGeofencePermissions();
+  const { foreground, background, loading, requestPermissions } =
+    useGeofencePermissions();
+
+  // Prompt for location permission the first time the user is signed in.
+  // iOS won't list the app under Settings > Privacy > Location Services
+  // until we've actually called requestForegroundPermissionsAsync at least
+  // once, so this is also what makes the app show up there.
+  React.useEffect(() => {
+    if (!session || loading) return;
+    if (foreground && background) return;
+    requestPermissions().catch(() => {
+      // User denied or system dismissed — they can re-enable from Settings.
+    });
+  }, [session, loading, foreground, background, requestPermissions]);
+
   useGeofenceRegistration({ enabled: !!session && background });
   return <>{children}</>;
 }
