@@ -18,10 +18,15 @@
       "bundleIdentifier": "com.fieldiq.app",
       "infoPlist": {
         "NSCameraUsageDescription": "Take photos of equipment and service work",
-        "NSLocationWhenInUseUsageDescription": "Record GPS location for arrive/depart timestamps",
+        "NSLocationWhenInUseUsageDescription": "Record GPS location for arrive/depart timestamps and verify clock-in location",
         "NSPhotoLibraryUsageDescription": "Select photos to attach to service visits",
         "NSFaceIDUsageDescription": "Use Face ID for quick login",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Automatically clock you in and out when you arrive at or leave job sites",
+        "UIBackgroundModes": [
+          "location",
+          "fetch"
+        ]
       },
       "buildNumber": "2"
     },
@@ -58,7 +63,10 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Record GPS location for arrive/depart timestamps"
+          "locationAlwaysAndWhenInUsePermission": "Automatically clock you in and out when you arrive at or leave job sites",
+          "locationWhenInUsePermission": "Record GPS location for arrive/depart timestamps and verify clock-in location",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true
         }
       ],
       [
