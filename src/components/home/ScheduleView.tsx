@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,8 @@ import {
   RefreshControl,
   StyleSheet,
   TouchableOpacity,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -38,11 +40,37 @@ const URGENCY_COLORS: Record<string, string> = {
 
 export default function ScheduleView() {
   const router = useRouter();
-  const { sections, loading, refresh } = useScheduleData();
+  const { sections, loading, refresh, markComplete } = useScheduleData();
+  const [completingId, setCompletingId] = useState<string | null>(null);
 
   const onRefresh = useCallback(async () => {
     await refresh();
   }, [refresh]);
+
+  const onMarkDone = useCallback(
+    (item: ScheduleItem) => {
+      Alert.alert(
+        "Mark Complete?",
+        `Close out "${item.title}" and mark it as completed?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Mark Complete",
+            style: "default",
+            onPress: async () => {
+              setCompletingId(item.id);
+              const ok = await markComplete(item.id);
+              setCompletingId(null);
+              if (!ok) {
+                Alert.alert("Error", "Could not update. Please try again.");
+              }
+            },
+          },
+        ]
+      );
+    },
+    [markComplete]
+  );
 
   const formatDate = (dateStr: string | null): string => {
     if (!dateStr) return "Unscheduled";
@@ -52,12 +80,14 @@ export default function ScheduleView() {
     return `${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
   };
 
-  const renderItem = ({ item }: { item: ScheduleItem; section: ScheduleSection }) => {
+  const renderItem = ({ item, section }: { item: ScheduleItem; section: ScheduleSection }) => {
     const status = STATUS_LABELS[item.status] ?? STATUS_LABELS.pending;
     const urgencyColor = URGENCY_COLORS[item.urgency] ?? Colors.gray[400];
     const address = item.jobsite
       ? `${item.jobsite.address_line1}, ${item.jobsite.city}`
       : "Unknown site";
+    const isOverdue = section.title === "Overdue";
+    const isCompleting = completingId === item.id;
 
     return (
       <TouchableOpacity
@@ -66,7 +96,7 @@ export default function ScheduleView() {
         }
         activeOpacity={0.7}
       >
-        <Card style={styles.card}>
+        <Card style={[styles.card, isOverdue && styles.cardOverdue]}>
           <View style={styles.cardHeader}>
             <View style={styles.cardHeaderLeft}>
               <View style={[styles.urgencyDot, { backgroundColor: urgencyColor }]} />
@@ -105,16 +135,38 @@ export default function ScheduleView() {
               </Text>
             </View>
           ) : null}
+          <View style={styles.actionsRow}>
+            <TouchableOpacity
+              style={[styles.doneBtn, isCompleting && styles.doneBtnDisabled]}
+              onPress={() => onMarkDone(item)}
+              disabled={isCompleting}
+              activeOpacity={0.8}
+            >
+              {isCompleting ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={16} color="#fff" />
+                  <Text style={styles.doneBtnText}>Mark Done</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
         </Card>
       </TouchableOpacity>
     );
   };
 
-  const renderSectionHeader = ({ section }: { section: ScheduleSection }) => (
+  const renderSectionHeader = ({ section }: { section: ScheduleSection }) => {
+    const isOverdue = section.title === "Overdue";
+    const isActive = section.title === "In Progress";
+    return (
     <View style={styles.sectionHeader}>
       <Ionicons
         name={
-          section.title === "In Progress"
+          isOverdue
+            ? "alert-circle"
+            : isActive
             ? "play-circle"
             : section.title === "Today"
             ? "today"
@@ -122,22 +174,30 @@ export default function ScheduleView() {
         }
         size={16}
         color={
-          section.title === "In Progress" ? Colors.primary[600] : Colors.gray[500]
+          isOverdue
+            ? "#dc2626"
+            : isActive
+            ? Colors.primary[600]
+            : Colors.gray[500]
         }
       />
       <Text
         style={[
           styles.sectionTitle,
-          section.title === "In Progress" && styles.sectionTitleActive,
+          isActive && styles.sectionTitleActive,
+          isOverdue && styles.sectionTitleOverdue,
         ]}
       >
         {section.title}
       </Text>
-      <View style={styles.sectionCount}>
-        <Text style={styles.sectionCountText}>{section.data.length}</Text>
+      <View style={[styles.sectionCount, isOverdue && styles.sectionCountOverdue]}>
+        <Text style={[styles.sectionCountText, isOverdue && styles.sectionCountTextOverdue]}>
+          {section.data.length}
+        </Text>
       </View>
     </View>
-  );
+    );
+  };
 
   const isEmpty = sections.length === 0 && !loading;
 
@@ -207,6 +267,41 @@ const styles = StyleSheet.create({
   card: {
     marginBottom: 10,
     marginHorizontal: 16,
+  },
+  cardOverdue: {
+    borderLeftWidth: 3,
+    borderLeftColor: "#dc2626",
+  },
+  sectionTitleOverdue: {
+    color: "#dc2626",
+  },
+  sectionCountOverdue: {
+    backgroundColor: "#fee2e2",
+  },
+  sectionCountTextOverdue: {
+    color: "#991b1b",
+  },
+  actionsRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginTop: 12,
+  },
+  doneBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#059669",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  doneBtnDisabled: {
+    opacity: 0.6,
+  },
+  doneBtnText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "700",
   },
   cardHeader: {
     flexDirection: "row",

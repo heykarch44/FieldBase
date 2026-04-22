@@ -36,6 +36,7 @@ export function useScheduleData() {
   })();
 
   const buildSections = (orders: ScheduleItem[]): ScheduleSection[] => {
+    const overdue: ScheduleItem[] = [];
     const active: ScheduleItem[] = [];
     const todayItems: ScheduleItem[] = [];
     const upcoming: ScheduleItem[] = [];
@@ -46,19 +47,29 @@ export function useScheduleData() {
         active.push(o);
         continue;
       }
-      if (!o.scheduled_date) continue;
-      if (o.scheduled_date === today) {
+      if (!o.scheduled_date) {
+        // Assigned but not dated: treat as overdue so it surfaces
+        overdue.push(o);
+        continue;
+      }
+      if (o.scheduled_date < today) {
+        overdue.push(o);
+      } else if (o.scheduled_date === today) {
         todayItems.push(o);
-      } else if (o.scheduled_date > today && o.scheduled_date <= sevenDaysFromNow) {
+      } else if (o.scheduled_date <= sevenDaysFromNow) {
+        upcoming.push(o);
+      } else {
+        // Beyond 7 days — still show under Upcoming so nothing silently drops off
         upcoming.push(o);
       }
     }
 
-    // Sort within sections
+    overdue.sort((a, b) => (a.scheduled_date ?? "").localeCompare(b.scheduled_date ?? ""));
     todayItems.sort((a, b) => (a.scheduled_date ?? "").localeCompare(b.scheduled_date ?? ""));
     upcoming.sort((a, b) => (a.scheduled_date ?? "").localeCompare(b.scheduled_date ?? ""));
 
     const result: ScheduleSection[] = [];
+    if (overdue.length > 0) result.push({ title: "Overdue", data: overdue });
     if (active.length > 0) result.push({ title: "In Progress", data: active });
     if (todayItems.length > 0) result.push({ title: "Today", data: todayItems });
     if (upcoming.length > 0) result.push({ title: "Upcoming", data: upcoming });
@@ -89,14 +100,13 @@ export function useScheduleData() {
         (a: { service_order_id: string }) => a.service_order_id
       );
 
-      // 2. Fetch scheduled/in-progress orders only, within today..+7 window
-      // (in_progress pulled regardless of date; upcoming constrained; today matched)
+      // 2. Fetch ALL open orders for this user (scheduled / approved / in_progress).
+      // We filter/bucket client-side: Overdue, In Progress, Today, Upcoming.
       const { data: ordersData, error: ordersErr } = await supabase
         .from("service_orders")
         .select("*")
         .in("id", orderIds)
-        .in("status", ACTIVE_STATUSES)
-        .or(`scheduled_date.is.null,scheduled_date.gte.${today}`);
+        .in("status", ACTIVE_STATUSES);
 
       if (ordersErr) throw ordersErr;
 
@@ -142,5 +152,21 @@ export function useScheduleData() {
     if (user) refresh();
   }, [user]);
 
-  return { sections, loading, error, refresh };
+  const markComplete = useCallback(
+    async (orderId: string) => {
+      const { error: updErr } = await supabase
+        .from("service_orders")
+        .update({ status: "completed", completed_at: new Date().toISOString() })
+        .eq("id", orderId);
+      if (updErr) {
+        setError(updErr.message);
+        return false;
+      }
+      await fetchOrders();
+      return true;
+    },
+    [fetchOrders]
+  );
+
+  return { sections, loading, error, refresh, markComplete };
 }
