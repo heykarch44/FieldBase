@@ -641,6 +641,7 @@ export default function SiteDetailPage() {
               access_notes: fields.access_notes || null,
             }
 
+            let geocodeFailed = false
             if (addrChanged) {
               try {
                 const coords = await geocodeAddress({
@@ -653,9 +654,18 @@ export default function SiteDetailPage() {
                   update.lat = coords.lat
                   update.lng = coords.lng
                   update.geocoded_at = new Date().toISOString()
+                } else {
+                  geocodeFailed = true
+                  // Clear stale coords so a wrong pin isn't used for geofencing.
+                  update.lat = null
+                  update.lng = null
+                  update.geocoded_at = null
                 }
               } catch {
-                // non-fatal
+                geocodeFailed = true
+                update.lat = null
+                update.lng = null
+                update.geocoded_at = null
               }
             }
 
@@ -671,6 +681,13 @@ export default function SiteDetailPage() {
             }
             setShowEditSite(false)
             await fetchData()
+            if (geocodeFailed) {
+              alert(
+                'Site saved, but we could not find coordinates for that address. ' +
+                  'Geofencing will not work until coordinates are set. ' +
+                  'Open the Geofence tab and tap the map to place the pin manually.'
+              )
+            }
           }}
         />
       </Modal>
