@@ -30,6 +30,7 @@ import type { SiteDocument } from "../../src/hooks/useSiteDocuments";
 import { PhotoViewer } from "../../src/components/PhotoViewer";
 import { NotesSection } from "../../src/components/NotesSection";
 import { TimeClockCard } from "../../src/components/TimeClockCard";
+import { ActivityFeed } from "../../src/components/ActivityFeed";
 import type {
   Jobsite,
   ServiceOrder,
@@ -499,6 +500,11 @@ export default function SiteDetailScreen() {
               .geofence_radius_m ?? 100
           }
         />
+
+        {/* Activity Feed */}
+        <View style={styles.activityWrap}>
+          <ActivityFeed jobsiteId={id} scope="site" />
+        </View>
 
         {/* Service orders */}
         <View style={styles.sectionHeader}>
@@ -1039,6 +1045,10 @@ const styles = StyleSheet.create({
   card: {
     marginBottom: 10,
     marginHorizontal: 16,
+  },
+  activityWrap: {
+    marginHorizontal: 16,
+    marginBottom: 10,
   },
   siteHeader: {
     flexDirection: "row",

@@ -21,6 +21,7 @@ import {
   ChevronsUpDown,
   Shield,
   Clock,
+  Activity,
 } from 'lucide-react'
 
 const navItems = [
@@ -35,6 +36,7 @@ const navItems = [
 
 const settingsItems = [
   { href: '/dashboard/settings/fields', label: 'Fields', icon: Layers },
+  { href: '/dashboard/settings/entry-types', label: 'Entry Types', icon: Activity },
   { href: '/dashboard/settings/team', label: 'Team', icon: Users },
   { href: '/dashboard/settings/org', label: 'Organization', icon: Building },
 ]

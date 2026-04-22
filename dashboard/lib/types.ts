@@ -328,6 +328,34 @@ export interface InventoryUsage {
   used_at: string;
 }
 
+export interface ActivityEntryType {
+  id: string;
+  org_id: string;
+  label: string;
+  icon: string | null;
+  color: string | null;
+  sort_order: number;
+  is_default: boolean;
+  created_at: string;
+}
+
+export interface ActivityEntry {
+  id: string;
+  org_id: string;
+  jobsite_id: string;
+  service_order_id: string | null;
+  visit_id: string | null;
+  entry_type_id: string | null;
+  title: string;
+  body: string | null;
+  author_id: string | null;
+  occurred_at: string;
+  created_at: string;
+  entry_type?: ActivityEntryType | null;
+  author?: { id: string; full_name: string | null; email: string } | null;
+  photos?: SitePhoto[];
+}
+
 export interface IndustryTemplate {
   id: string;
   name: string;

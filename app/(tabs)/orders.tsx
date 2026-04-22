@@ -19,6 +19,7 @@ import { StatusBadge } from "../../src/components/StatusBadge";
 import { Card } from "../../src/components/Card";
 import { EmptyState } from "../../src/components/EmptyState";
 import { NotesSection } from "../../src/components/NotesSection";
+import { ActivityFeed } from "../../src/components/ActivityFeed";
 import { Colors, UrgencyColors } from "../../src/constants/theme";
 
 const URGENCY_LABELS: Record<string, { label: string; bg: string; text: string }> = {
@@ -211,6 +212,17 @@ export default function OrdersScreen() {
                     title="Service Order Notes"
                     compact
                     embedded
+                  />
+                </View>
+              )}
+
+              {/* Activity Feed */}
+              {item.jobsite_id && (
+                <View style={styles.notesWrap}>
+                  <ActivityFeed
+                    jobsiteId={item.jobsite_id}
+                    serviceOrderId={item.id}
+                    scope="service_order"
                   />
                 </View>
               )}

@@ -26,6 +26,7 @@ import {
 import { ClipboardList, Loader2, X, Check, ChevronDown } from 'lucide-react'
 import type { ServiceOrder, ServiceOrderStatus, UrgencyLevel } from '@/lib/types'
 import { NotesPanel } from '@/components/NotesPanel'
+import { ActivityFeed } from '@/components/ActivityFeed'
 
 interface OrgMember {
   user_id: string
@@ -742,6 +743,20 @@ export default function ServiceOrdersPage() {
                   currentUserId={currentUserId}
                   canManage={canManage}
                   title="Service Order Notes"
+                />
+              </div>
+            )}
+
+            {/* Activity Feed */}
+            {selectedOrder.jobsite_id && (
+              <div className="border-t border-sand-100 pt-4">
+                <ActivityFeed
+                  jobsiteId={selectedOrder.jobsite_id}
+                  serviceOrderId={selectedOrder.id}
+                  scope="service_order"
+                  orgId={selectedOrder.org_id}
+                  currentUserId={currentUserId}
+                  canManage={canManage}
                 />
               </div>
             )}

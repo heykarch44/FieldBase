@@ -50,14 +50,16 @@ import {
   ChevronLeft,
   ChevronRight,
   MessageSquare,
+  Activity as ActivityIcon,
 } from 'lucide-react'
 import { NotesPanel } from '@/components/NotesPanel'
+import { ActivityFeed } from '@/components/ActivityFeed'
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type TabKey = 'overview' | 'service_orders' | 'visits' | 'notes' | 'photos' | 'documents' | 'equipment' | 'geofence' | 'time_clock'
+type TabKey = 'overview' | 'activity' | 'service_orders' | 'visits' | 'notes' | 'photos' | 'documents' | 'equipment' | 'geofence' | 'time_clock'
 
 interface Tab {
   key: TabKey
@@ -77,6 +79,7 @@ interface SiteAssigneeInfo {
 
 const TABS: Tab[] = [
   { key: 'overview', label: 'Overview', icon: <Info className="h-4 w-4" /> },
+  { key: 'activity', label: 'Activity', icon: <ActivityIcon className="h-4 w-4" /> },
   { key: 'service_orders', label: 'Service Orders', icon: <ClipboardList className="h-4 w-4" /> },
   { key: 'visits', label: 'Visits', icon: <Clock className="h-4 w-4" /> },
   { key: 'geofence', label: 'Geofence', icon: <MapPin className="h-4 w-4" /> },
@@ -532,6 +535,15 @@ export default function SiteDetailPage() {
           equipment={equipment}
           siteAssignees={siteAssignees}
           onEditAssignees={openEditSiteAssignees}
+        />
+      )}
+      {activeTab === 'activity' && (
+        <ActivityFeed
+          jobsiteId={id}
+          scope="site"
+          orgId={activeOrgId}
+          currentUserId={currentUserId}
+          canManage={canManage}
         />
       )}
       {activeTab === 'service_orders' && (
