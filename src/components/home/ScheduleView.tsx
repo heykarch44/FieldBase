@@ -3,18 +3,38 @@ import {
   View,
   Text,
   SectionList,
-  TouchableOpacity,
   RefreshControl,
   StyleSheet,
+  TouchableOpacity,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useScheduleData, type ScheduleItem, type ScheduleSection } from "../../hooks/useScheduleData";
-import { StatusBadge } from "../StatusBadge";
+import {
+  useScheduleData,
+  type ScheduleItem,
+  type ScheduleSection,
+} from "../../hooks/useScheduleData";
 import { Card } from "../Card";
-import { Button } from "../Button";
 import { EmptyState } from "../EmptyState";
-import { Colors, VisitStatusColors } from "../../constants/theme";
+import { Colors } from "../../constants/theme";
+
+const STATUS_LABELS: Record<string, { label: string; bg: string; text: string }> = {
+  draft: { label: "Draft", bg: "#e5e7eb", text: "#374151" },
+  pending: { label: "Pending", bg: "#fef3c7", text: "#92400e" },
+  approved: { label: "Approved", bg: "#dbeafe", text: "#1e40af" },
+  scheduled: { label: "Scheduled", bg: "#e0e7ff", text: "#3730a3" },
+  in_progress: { label: "In Progress", bg: "#d1fae5", text: "#065f46" },
+  completed: { label: "Completed", bg: "#d1fae5", text: "#065f46" },
+  invoiced: { label: "Invoiced", bg: "#ede9fe", text: "#5b21b6" },
+  canceled: { label: "Canceled", bg: "#fee2e2", text: "#991b1b" },
+};
+
+const URGENCY_COLORS: Record<string, string> = {
+  emergency: "#dc2626",
+  high: "#ea580c",
+  medium: "#ca8a04",
+  low: "#64748b",
+};
 
 export default function ScheduleView() {
   const router = useRouter();
@@ -24,152 +44,91 @@ export default function ScheduleView() {
     await refresh();
   }, [refresh]);
 
-  const getDayIndicator = (scheduledDate: string): string => {
-    const start = new Date(scheduledDate);
-    const now = new Date();
-    const diffMs = now.getTime() - start.getTime();
-    const diffDays = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
-    return `Day ${diffDays}`;
-  };
-
-  const formatTime = (time: string | null): string | null => {
-    if (!time) return null;
-    try {
-      const [hours, minutes] = time.split(":");
-      const h = parseInt(hours, 10);
-      const ampm = h >= 12 ? "PM" : "AM";
-      const h12 = h % 12 || 12;
-      return `${h12}:${minutes} ${ampm}`;
-    } catch {
-      return time;
-    }
-  };
-
-  const formatDate = (dateStr: string): string => {
+  const formatDate = (dateStr: string | null): string => {
+    if (!dateStr) return "Unscheduled";
     const d = new Date(dateStr + "T00:00:00");
     const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     return `${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
   };
 
-  const renderActiveItem = (item: ScheduleItem) => {
-    const address = `${item.jobsite.address_line1}, ${item.jobsite.city}`;
+  const renderItem = ({ item }: { item: ScheduleItem; section: ScheduleSection }) => {
+    const status = STATUS_LABELS[item.status] ?? STATUS_LABELS.pending;
+    const urgencyColor = URGENCY_COLORS[item.urgency] ?? Colors.gray[400];
+    const address = item.jobsite
+      ? `${item.jobsite.address_line1}, ${item.jobsite.city}`
+      : "Unknown site";
+
     return (
-      <Card style={styles.card}>
-        <View style={styles.cardHeader}>
-          <View style={styles.cardHeaderLeft}>
-            <View style={[styles.statusDot, { backgroundColor: VisitStatusColors[item.status] ?? Colors.gray[400] }]} />
-            <View style={styles.cardInfo}>
-              <Text style={styles.cardName}>{item.jobsite.name}</Text>
-              <Text style={styles.cardAddress}>{address}</Text>
+      <TouchableOpacity
+        onPress={() =>
+          item.jobsite ? router.push(`/site/${item.jobsite.id}`) : undefined
+        }
+        activeOpacity={0.7}
+      >
+        <Card style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.cardHeaderLeft}>
+              <View style={[styles.urgencyDot, { backgroundColor: urgencyColor }]} />
+              <View style={styles.cardInfo}>
+                <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+                {item.jobsite && (
+                  <Text style={styles.cardSiteName} numberOfLines={1}>
+                    {item.jobsite.name}
+                  </Text>
+                )}
+                <Text style={styles.cardAddress} numberOfLines={1}>{address}</Text>
+              </View>
+            </View>
+            <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
+              <Text style={[styles.statusText, { color: status.text }]}>
+                {status.label}
+              </Text>
             </View>
           </View>
-          <View style={styles.dayBadge}>
-            <Text style={styles.dayBadgeText}>{getDayIndicator(item.scheduled_date)}</Text>
+          <View style={styles.metaRow}>
+            <Ionicons name="calendar-outline" size={14} color={Colors.gray[500]} />
+            <Text style={styles.metaText}>{formatDate(item.scheduled_date)}</Text>
+            {item.requires_signature && (
+              <>
+                <View style={styles.metaDivider} />
+                <Ionicons name="create-outline" size={14} color={Colors.primary[600]} />
+                <Text style={[styles.metaText, { color: Colors.primary[700] }]}>Signature</Text>
+              </>
+            )}
           </View>
-        </View>
-        <View style={styles.cardActions}>
-          <Button
-            title="Continue Service"
-            onPress={() => router.push(`/visit/${item.id}`)}
-            size="sm"
-          />
-        </View>
-      </Card>
-    );
-  };
-
-  const renderTodayItem = (item: ScheduleItem) => {
-    const address = `${item.jobsite.address_line1}, ${item.jobsite.city}`;
-    const time = formatTime(item.scheduled_time);
-    return (
-      <Card style={styles.card}>
-        <View style={styles.cardHeader}>
-          <View style={styles.cardHeaderLeft}>
-            <View style={[styles.statusDot, { backgroundColor: VisitStatusColors[item.status] ?? Colors.gray[400] }]} />
-            <View style={styles.cardInfo}>
-              <Text style={styles.cardName}>{item.jobsite.name}</Text>
-              <Text style={styles.cardAddress}>{address}</Text>
-              {time && <Text style={styles.cardTime}>{time}</Text>}
+          {item.jobsite?.access_notes ? (
+            <View style={styles.accessNotesRow}>
+              <Ionicons name="information-circle" size={14} color={Colors.primary[600]} />
+              <Text style={styles.accessNotesText} numberOfLines={2}>
+                {item.jobsite.access_notes}
+              </Text>
             </View>
-          </View>
-          <StatusBadge status={item.status} />
-        </View>
-        {item.jobsite.access_notes && (
-          <View style={styles.accessNotesRow}>
-            <Ionicons name="information-circle" size={14} color={Colors.primary[600]} />
-            <Text style={styles.accessNotesText}>{item.jobsite.access_notes}</Text>
-          </View>
-        )}
-        <View style={styles.cardActions}>
-          <Button
-            title={
-              item.status === "completed"
-                ? "View Visit"
-                : item.status === "in_progress"
-                ? "Continue Service"
-                : "Start Service"
-            }
-            onPress={() => router.push(`/visit/${item.id}`)}
-            size="sm"
-            variant={item.status === "completed" ? "outline" : "primary"}
-          />
-        </View>
-      </Card>
+          ) : null}
+        </Card>
+      </TouchableOpacity>
     );
-  };
-
-  const renderUpcomingItem = (item: ScheduleItem) => {
-    const time = formatTime(item.scheduled_time);
-    return (
-      <Card style={styles.cardUpcoming}>
-        <View style={styles.upcomingRow}>
-          <View style={styles.upcomingDateCol}>
-            <Text style={styles.upcomingDate}>{formatDate(item.scheduled_date)}</Text>
-            {time && <Text style={styles.upcomingTime}>{time}</Text>}
-          </View>
-          <View style={styles.upcomingInfo}>
-            <Text style={styles.upcomingName}>{item.jobsite.name}</Text>
-            <Text style={styles.upcomingAddress}>
-              {item.jobsite.address_line1}, {item.jobsite.city}
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={Colors.gray[300]} />
-        </View>
-      </Card>
-    );
-  };
-
-  const renderItem = ({ item, section }: { item: ScheduleItem; section: ScheduleSection }) => {
-    switch (section.title) {
-      case "Active":
-        return renderActiveItem(item);
-      case "Today":
-        return renderTodayItem(item);
-      case "Upcoming":
-        return renderUpcomingItem(item);
-      default:
-        return renderTodayItem(item);
-    }
   };
 
   const renderSectionHeader = ({ section }: { section: ScheduleSection }) => (
     <View style={styles.sectionHeader}>
       <Ionicons
         name={
-          section.title === "Active"
+          section.title === "In Progress"
             ? "play-circle"
             : section.title === "Today"
             ? "today"
             : "calendar"
         }
         size={16}
-        color={section.title === "Active" ? Colors.primary[600] : Colors.gray[500]}
+        color={
+          section.title === "In Progress" ? Colors.primary[600] : Colors.gray[500]
+        }
       />
       <Text
         style={[
           styles.sectionTitle,
-          section.title === "Active" && styles.sectionTitleActive,
+          section.title === "In Progress" && styles.sectionTitleActive,
         ]}
       >
         {section.title}
@@ -187,8 +146,8 @@ export default function ScheduleView() {
       {isEmpty ? (
         <EmptyState
           icon="calendar-outline"
-          title="No Appointments"
-          subtitle="You have no scheduled visits. Pull down to refresh."
+          title="No scheduled work"
+          subtitle="You have no scheduled or upcoming service orders. Pull down to refresh."
         />
       ) : (
         <SectionList
@@ -249,21 +208,18 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginHorizontal: 16,
   },
-  cardUpcoming: {
-    marginBottom: 8,
-    marginHorizontal: 16,
-  },
   cardHeader: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
+    gap: 10,
   },
   cardHeaderLeft: {
     flexDirection: "row",
     alignItems: "flex-start",
     flex: 1,
   },
-  statusDot: {
+  urgencyDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
@@ -273,32 +229,48 @@ const styles = StyleSheet.create({
   cardInfo: {
     flex: 1,
   },
-  cardName: {
+  cardTitle: {
     fontSize: 16,
     fontWeight: "700",
     color: "#111827",
   },
-  cardAddress: {
+  cardSiteName: {
     fontSize: 14,
+    color: Colors.primary[700],
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  cardAddress: {
+    fontSize: 13,
     color: "#6b7280",
     marginTop: 2,
   },
-  cardTime: {
-    fontSize: 13,
-    color: Colors.primary[600],
-    fontWeight: "600",
-    marginTop: 4,
-  },
-  dayBadge: {
-    backgroundColor: Colors.primary[50],
+  statusBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
   },
-  dayBadgeText: {
+  statusText: {
     fontSize: 12,
     fontWeight: "600",
-    color: Colors.primary[700],
+  },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 10,
+  },
+  metaText: {
+    fontSize: 13,
+    color: Colors.gray[600],
+    fontWeight: "500",
+  },
+  metaDivider: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.gray[300],
+    marginHorizontal: 4,
   },
   accessNotesRow: {
     flexDirection: "row",
@@ -313,39 +285,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#92400e",
     flex: 1,
-  },
-  cardActions: {
-    marginTop: 12,
-  },
-  upcomingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  upcomingDateCol: {
-    minWidth: 80,
-  },
-  upcomingDate: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: Colors.gray[700],
-  },
-  upcomingTime: {
-    fontSize: 12,
-    color: Colors.gray[500],
-    marginTop: 2,
-  },
-  upcomingInfo: {
-    flex: 1,
-  },
-  upcomingName: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#111827",
-  },
-  upcomingAddress: {
-    fontSize: 13,
-    color: "#6b7280",
-    marginTop: 1,
   },
 });
