@@ -632,16 +632,31 @@ export default function ServiceOrdersPage() {
     const order = orders.find((o) => o.id === orderId)
     if (!order || order.status === newStatus) return
 
+    // Guard: moving into "Scheduled" requires a scheduled date.
+    if (newStatus === 'scheduled' && !order.scheduled_date) {
+      alert('Please set a Scheduled Date before moving this order to Scheduled.')
+      openEditModal(order)
+      return
+    }
+
     // Optimistic update
     setOrders((prev) =>
       prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
     )
 
     const supabase = createClient()
-    await supabase
+    const { error } = await supabase
       .from('service_orders')
       .update({ status: newStatus })
       .eq('id', orderId)
+
+    if (error) {
+      // Roll back optimistic update on failure
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, status: order.status } : o))
+      )
+      alert(`Failed to update status: ${error.message}`)
+    }
   }
 
   if (loading) {
