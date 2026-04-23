@@ -8,6 +8,10 @@ import { OrgProvider } from "../src/providers/OrgProvider";
 // Registers the TaskManager.defineTask at module evaluation — must be
 // imported before any Location.startGeofencingAsync call.
 import "../src/lib/backgroundGeofenceTask";
+// Dwell-mode background location task — same deal, must be imported at
+// module load so TaskManager.defineTask runs before the OS tries to wake
+// the task.
+import "../src/lib/backgroundLocationTask";
 import { useGeofenceRegistration } from "../src/hooks/useGeofenceRegistration";
 import { useGeofencePermissions } from "../src/hooks/useGeofencePermissions";
 import { useClockStateReconcile } from "../src/hooks/useClockStateReconcile";

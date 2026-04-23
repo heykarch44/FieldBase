@@ -4,6 +4,7 @@ import * as TaskManager from "expo-task-manager";
 import { GEOFENCE_TASK } from "../lib/backgroundGeofenceTask";
 import { haversineDistance } from "../lib/geo";
 import { useAssignedSites } from "./useAssignedSites";
+import { writeCachedSites } from "../lib/sessionCache";
 
 const IOS_MAX_REGIONS = 20;
 
@@ -75,6 +76,18 @@ export function useGeofenceRegistration(options: {
       notifyOnEnter: true,
       notifyOnExit: true,
     }));
+
+    // Mirror the chosen sites into SecureStore so the background
+    // location task (dwell mode) can evaluate distance to the same set
+    // of sites without React context.
+    await writeCachedSites(
+      chosen.map((s) => ({
+        id: s.id,
+        lat: s.lat as number,
+        lng: s.lng as number,
+        radius_m: s.geofence_radius_m ?? 100,
+      }))
+    ).catch(() => {});
 
     // Build a cheap key to avoid redundant re-registrations
     const key = regions

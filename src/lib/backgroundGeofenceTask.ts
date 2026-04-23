@@ -9,8 +9,31 @@
 import * as TaskManager from "expo-task-manager";
 import * as Location from "expo-location";
 import { readSessionCache } from "./sessionCache";
+import {
+  startLocationTracking,
+  stopLocationTracking,
+} from "./backgroundLocationTask";
 
 export const GEOFENCE_TASK = "geofence-task";
+
+// Hard timeout on any background fetch. iOS only gives the task ~30s and
+// network hangs on cell handoffs have been linked to foreground app hangs
+// when JS is still awaiting the promise on wake-up.
+async function timedFetch(
+  url: string,
+  init: RequestInit,
+  timeoutMs = 8000
+): Promise<Response | null> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 const SUPABASE_URL =
   process.env.EXPO_PUBLIC_SUPABASE_URL ?? "https://placeholder.supabase.co";
@@ -44,21 +67,17 @@ async function insertClockEvent(params: {
     inside_geofence: params.insideGeofence,
   };
 
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/time_clock_events`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${params.accessToken}`,
-        Prefer: "return=minimal",
-      },
-      body: JSON.stringify(body),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
+  const res = await timedFetch(`${SUPABASE_URL}/rest/v1/time_clock_events`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${params.accessToken}`,
+      Prefer: "return=minimal",
+    },
+    body: JSON.stringify(body),
+  });
+  return !!res && res.ok;
 }
 
 // Fetch the user's last event at a specific site to decide whether a new
@@ -69,21 +88,21 @@ async function fetchLastEventAtSite(params: {
   jobsiteId: string;
   accessToken: string;
 }): Promise<{ event_type: string } | null> {
+  const url =
+    `${SUPABASE_URL}/rest/v1/time_clock_events` +
+    `?user_id=eq.${params.userId}` +
+    `&jobsite_id=eq.${params.jobsiteId}` +
+    `&select=event_type` +
+    `&order=occurred_at.desc` +
+    `&limit=1`;
+  const res = await timedFetch(url, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+  });
+  if (!res || !res.ok) return null;
   try {
-    const url =
-      `${SUPABASE_URL}/rest/v1/time_clock_events` +
-      `?user_id=eq.${params.userId}` +
-      `&jobsite_id=eq.${params.jobsiteId}` +
-      `&select=event_type` +
-      `&order=occurred_at.desc` +
-      `&limit=1`;
-    const res = await fetch(url, {
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${params.accessToken}`,
-      },
-    });
-    if (!res.ok) return null;
     const rows = (await res.json()) as Array<{ event_type: string }>;
     return rows[0] ?? null;
   } catch {
@@ -149,4 +168,16 @@ TaskManager.defineTask<GeofenceTaskBody>(GEOFENCE_TASK, async ({ data, error }) 
     lng: region.longitude,
     insideGeofence: clockEvent === "clock_in",
   });
+
+  // DWELL MODE: on enter, spin up background location updates so we can
+  // detect the actual exit time (iOS geofence Exit is unreliable when
+  // phone is locked and stationary cell-wise). On exit from geofence
+  // (rare but it happens), stop the task if we're not inside any region.
+  // The location task itself also auto-stops when it observes the user
+  // is outside all sites for the dwell window.
+  if (clockEvent === "clock_in") {
+    startLocationTracking().catch(() => {});
+  } else {
+    stopLocationTracking().catch(() => {});
+  }
 });
