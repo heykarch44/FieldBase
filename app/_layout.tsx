@@ -10,6 +10,7 @@ import { OrgProvider } from "../src/providers/OrgProvider";
 import "../src/lib/backgroundGeofenceTask";
 import { useGeofenceRegistration } from "../src/hooks/useGeofenceRegistration";
 import { useGeofencePermissions } from "../src/hooks/useGeofencePermissions";
+import { useClockStateReconcile } from "../src/hooks/useClockStateReconcile";
 
 function GeofenceBootstrap({ children }: { children: React.ReactNode }) {
   const { session } = useAuth();
@@ -29,6 +30,12 @@ function GeofenceBootstrap({ children }: { children: React.ReactNode }) {
   }, [session, loading, foreground, background, requestPermissions]);
 
   useGeofenceRegistration({ enabled: !!session && background });
+
+  // When the app comes to foreground, check if we're still inside any site
+  // we're clocked in to. If not, write the missing clock_out. Covers the
+  // case where iOS never fired an exit event (phone locked in a pocket).
+  useClockStateReconcile({ enabled: !!session && foreground });
+
   return <>{children}</>;
 }
 
