@@ -29,6 +29,8 @@ export default function OrgSettingsPage() {
   const [timezone, setTimezone] = useState('')
   const [logoUrl, setLogoUrl] = useState('')
   const [routesEnabled, setRoutesEnabled] = useState(true)
+  const [clockInLabel, setClockInLabel] = useState('Clocked In')
+  const [clockOutLabel, setClockOutLabel] = useState('Clocked Out')
 
   useEffect(() => {
     fetchOrg()
@@ -59,7 +61,18 @@ export default function OrgSettingsPage() {
       setName(orgData.name)
       setTimezone(orgData.timezone)
       setLogoUrl(orgData.logo_url ?? '')
-      setRoutesEnabled((orgData.settings as Record<string, unknown>)?.routes_enabled !== false)
+      const settings = (orgData.settings ?? {}) as Record<string, unknown>
+      setRoutesEnabled(settings.routes_enabled !== false)
+      setClockInLabel(
+        typeof settings.clock_in_label === 'string' && settings.clock_in_label
+          ? (settings.clock_in_label as string)
+          : 'Clocked In'
+      )
+      setClockOutLabel(
+        typeof settings.clock_out_label === 'string' && settings.clock_out_label
+          ? (settings.clock_out_label as string)
+          : 'Clocked Out'
+      )
     }
     setLoading(false)
   }
@@ -69,7 +82,12 @@ export default function OrgSettingsPage() {
     setSaving(true)
 
     const supabase = createClient()
-    const updatedSettings = { ...(org.settings ?? {}), routes_enabled: routesEnabled }
+    const updatedSettings = {
+      ...(org.settings ?? {}),
+      routes_enabled: routesEnabled,
+      clock_in_label: clockInLabel.trim() || 'Clocked In',
+      clock_out_label: clockOutLabel.trim() || 'Clocked Out',
+    }
     await supabase
       .from('organizations')
       .update({
@@ -206,6 +224,47 @@ export default function OrgSettingsPage() {
                 Appointments &amp; multi-day projects
               </span>
             </button>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <CardTitle>Time Clock Notifications</CardTitle>
+        <div className="space-y-4">
+          <p className="text-sm text-sand-500">
+            These labels are used in the mobile push notification that fires
+            the moment a technician’s phone registers a clock-in or clock-out
+            at a site.
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-sand-700">
+                Clock-in notification title
+              </label>
+              <Input
+                value={clockInLabel}
+                onChange={(e) => setClockInLabel(e.target.value)}
+                maxLength={40}
+                placeholder="Clocked In"
+              />
+              <p className="mt-1 text-xs text-sand-400">
+                e.g. “On Site”, “Service Site In”, “Started Shift”
+              </p>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-sand-700">
+                Clock-out notification title
+              </label>
+              <Input
+                value={clockOutLabel}
+                onChange={(e) => setClockOutLabel(e.target.value)}
+                maxLength={40}
+                placeholder="Clocked Out"
+              />
+              <p className="mt-1 text-xs text-sand-400">
+                e.g. “Off Site”, “Service Site Out”, “Ended Shift”
+              </p>
+            </div>
           </div>
         </div>
       </Card>

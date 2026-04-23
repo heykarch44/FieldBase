@@ -16,8 +16,29 @@
 
 import * as Location from "expo-location";
 import * as TaskManager from "expo-task-manager";
-import { readSessionCache, readCachedSites } from "./sessionCache";
+import * as Notifications from "expo-notifications";
+import {
+  readSessionCache,
+  readCachedSites,
+  readCachedClockLabels,
+} from "./sessionCache";
 import { haversineDistance } from "./geo";
+
+async function fireClockOutNotification(siteName: string): Promise<void> {
+  try {
+    const labels = await readCachedClockLabels();
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: labels.clockOut,
+        body: siteName,
+        sound: "default",
+      },
+      trigger: null,
+    });
+  } catch {
+    // best-effort
+  }
+}
 
 export const LOCATION_TASK = "fieldiq-background-location";
 
@@ -191,6 +212,8 @@ TaskManager.defineTask<LocationTaskBody>(LOCATION_TASK, async ({ data, error }) 
         // Retry next tick by not removing from firstOutsideAt. Put a stale
         // "first" time back so we immediately retry next sample.
         firstOutsideAt.set(site.id, now - DWELL_EXIT_SECS * 1000);
+      } else {
+        await fireClockOutNotification(site.name ?? "Site");
       }
       openSiteIds.push(site.id);
     }

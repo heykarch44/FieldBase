@@ -9,6 +9,8 @@ const ORG_ID_KEY = "fieldiq_bg_org_id";
 const ACCESS_TOKEN_KEY = "fieldiq_bg_access_token";
 const REFRESH_TOKEN_KEY = "fieldiq_bg_refresh_token";
 const ASSIGNED_SITES_KEY = "fieldiq_bg_assigned_sites";
+const CLOCK_IN_LABEL_KEY = "fieldiq_bg_clock_in_label";
+const CLOCK_OUT_LABEL_KEY = "fieldiq_bg_clock_out_label";
 
 export interface CachedSession {
   userId: string;
@@ -55,6 +57,8 @@ export async function clearSessionCache(): Promise<void> {
     SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY),
     SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY),
     SecureStore.deleteItemAsync(ASSIGNED_SITES_KEY),
+    SecureStore.deleteItemAsync(CLOCK_IN_LABEL_KEY),
+    SecureStore.deleteItemAsync(CLOCK_OUT_LABEL_KEY),
   ]);
 }
 
@@ -71,9 +75,41 @@ export async function updateCachedOrgId(orgId: string | null): Promise<void> {
 // list changes in the UI.
 export interface CachedSite {
   id: string;
+  name: string;
   lat: number;
   lng: number;
   radius_m: number;
+}
+
+// Per-org labels used on the mobile clock-in/clock-out notification. The
+// notification fires from background tasks so we cache these in SecureStore.
+export interface CachedClockLabels {
+  clockIn: string;
+  clockOut: string;
+}
+
+const DEFAULT_CLOCK_LABELS: CachedClockLabels = {
+  clockIn: "Clocked In",
+  clockOut: "Clocked Out",
+};
+
+export async function writeCachedClockLabels(
+  labels: CachedClockLabels
+): Promise<void> {
+  await SecureStore.setItemAsync(CLOCK_IN_LABEL_KEY, labels.clockIn);
+  await SecureStore.setItemAsync(CLOCK_OUT_LABEL_KEY, labels.clockOut);
+}
+
+export async function readCachedClockLabels(): Promise<CachedClockLabels> {
+  const [clockIn, clockOut] = await Promise.all([
+    SecureStore.getItemAsync(CLOCK_IN_LABEL_KEY),
+    SecureStore.getItemAsync(CLOCK_OUT_LABEL_KEY),
+  ]);
+  return {
+    clockIn: clockIn && clockIn.trim() ? clockIn : DEFAULT_CLOCK_LABELS.clockIn,
+    clockOut:
+      clockOut && clockOut.trim() ? clockOut : DEFAULT_CLOCK_LABELS.clockOut,
+  };
 }
 
 export async function writeCachedSites(sites: CachedSite[]): Promise<void> {

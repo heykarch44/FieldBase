@@ -8,11 +8,42 @@
 
 import * as TaskManager from "expo-task-manager";
 import * as Location from "expo-location";
-import { readSessionCache } from "./sessionCache";
+import * as Notifications from "expo-notifications";
+import {
+  readSessionCache,
+  readCachedSites,
+  readCachedClockLabels,
+} from "./sessionCache";
 import {
   startLocationTracking,
   stopLocationTracking,
 } from "./backgroundLocationTask";
+
+async function fireClockNotification(params: {
+  eventType: "clock_in" | "clock_out";
+  jobsiteId: string;
+}): Promise<void> {
+  try {
+    const [labels, sites] = await Promise.all([
+      readCachedClockLabels(),
+      readCachedSites(),
+    ]);
+    const site = sites.find((s) => s.id === params.jobsiteId);
+    const siteName = site?.name ?? "Site";
+    const title =
+      params.eventType === "clock_in" ? labels.clockIn : labels.clockOut;
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body: siteName,
+        sound: "default",
+      },
+      trigger: null,
+    });
+  } catch {
+    // Notifications are best-effort — never block the clock event on this.
+  }
+}
 
 export const GEOFENCE_TASK = "geofence-task";
 
@@ -158,7 +189,7 @@ TaskManager.defineTask<GeofenceTaskBody>(GEOFENCE_TASK, async ({ data, error }) 
     }
   }
 
-  await insertClockEvent({
+  const inserted = await insertClockEvent({
     userId: session.userId,
     orgId: session.orgId,
     jobsiteId: region.identifier,
@@ -168,6 +199,13 @@ TaskManager.defineTask<GeofenceTaskBody>(GEOFENCE_TASK, async ({ data, error }) 
     lng: region.longitude,
     insideGeofence: clockEvent === "clock_in",
   });
+
+  if (inserted) {
+    await fireClockNotification({
+      eventType: clockEvent,
+      jobsiteId: region.identifier,
+    });
+  }
 
   // DWELL MODE: on enter, spin up background location updates so we can
   // detect the actual exit time (iOS geofence Exit is unreliable when
