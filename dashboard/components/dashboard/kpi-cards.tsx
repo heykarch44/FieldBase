@@ -20,33 +20,44 @@ export function KpiCards() {
   useEffect(() => {
     async function fetchKpis() {
       const supabase = createClient()
-      const today = new Date().toISOString().split('T')[0]
+      // Use the device's local date rather than UTC so "today" matches what
+      // the user sees on their wall clock (toISOString returns UTC).
+      const now = new Date()
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
-      const [jobsitesRes, visitsRes, ordersRes, membersRes] = await Promise.all([
+      // Pending = anything that is scheduled but not yet completed or closed out.
+      // No 'pending' status exists in the enum, so we count the open statuses
+      // that live in the scheduling queue: scheduled + in_progress.
+      const OPEN_STATUSES = ['scheduled', 'in_progress']
+
+      const [jobsitesRes, todayOrdersRes, pendingRes, membersRes] = await Promise.all([
         supabase
           .from('jobsites')
           .select('id', { count: 'exact', head: true })
           .eq('status', 'active'),
         supabase
-          .from('visits')
+          .from('service_orders')
           .select('id, status')
           .eq('scheduled_date', today),
         supabase
           .from('service_orders')
           .select('id', { count: 'exact', head: true })
-          .eq('status', 'pending'),
+          .in('status', OPEN_STATUSES),
         supabase
           .from('org_members')
           .select('id', { count: 'exact', head: true }),
       ])
 
-      const totalVisits = visitsRes.data?.length ?? 0
-      const completedVisits = visitsRes.data?.filter((v) => v.status === 'completed').length ?? 0
+      const totalVisits = todayOrdersRes.data?.length ?? 0
+      const completedVisits =
+        todayOrdersRes.data?.filter(
+          (o) => o.status === 'completed' || o.status === 'invoiced'
+        ).length ?? 0
 
       setData({
         activeJobsites: jobsitesRes.count ?? 0,
         todayVisits: { completed: completedVisits, total: totalVisits },
-        pendingOrders: ordersRes.count ?? 0,
+        pendingOrders: pendingRes.count ?? 0,
         teamMembers: membersRes.count ?? 0,
       })
       setLoading(false)
