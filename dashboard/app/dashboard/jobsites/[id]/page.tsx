@@ -2556,27 +2556,90 @@ function GeofenceTab({ site, onSaved }: { site: Jobsite; onSaved: () => void }) 
           )}
 
           {lat == null || lng == null ? (
-            <div className="flex flex-col items-center rounded-lg border border-dashed border-sand-300 bg-sand-50 p-8 text-center">
-              <MapPin className="mb-2 h-10 w-10 text-sand-300" />
-              <p className="text-sm font-medium text-sand-700">
-                This site has no coordinates yet.
-              </p>
-              <p className="mt-1 text-xs text-sand-500">
-                Use the button below to geocode from the site address.
-              </p>
-              <Button onClick={handleGeocode} disabled={busy} className="mt-4">
-                {busy ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" /> Geocoding…
-                  </>
-                ) : (
-                  <>Geocode this address</>
-                )}
-              </Button>
+            <div className="space-y-4">
+              <div className="flex flex-col items-center rounded-lg border border-dashed border-sand-300 bg-sand-50 p-6 text-center">
+                <MapPin className="mb-2 h-10 w-10 text-sand-300" />
+                <p className="text-sm font-medium text-sand-700">
+                  This site has no coordinates yet.
+                </p>
+                <p className="mt-1 text-xs text-sand-500">
+                  Geocode from the address, drop a default pin and fine-tune it
+                  on the map, or enter coordinates manually below.
+                </p>
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                  <Button onClick={handleGeocode} disabled={busy}>
+                    {busy ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" /> Geocoding…
+                      </>
+                    ) : (
+                      <>Geocode this address</>
+                    )}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      // Phoenix metro default so the map opens somewhere useful.
+                      setLat(33.4484)
+                      setLng(-112.074)
+                      setInfo(
+                        'Pin dropped — drag it or tap the map to set the exact location.'
+                      )
+                    }}
+                    disabled={busy}
+                  >
+                    Drop pin on map
+                  </Button>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-sand-200 p-4">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-sand-400">
+                  Enter coordinates manually
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs text-sand-600">Latitude</label>
+                    <Input
+                      type="number"
+                      step="0.000001"
+                      placeholder="33.4484"
+                      onChange={(e) => {
+                        const v = parseFloat(e.target.value)
+                        setLat(Number.isFinite(v) ? v : null)
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-sand-600">Longitude</label>
+                    <Input
+                      type="number"
+                      step="0.000001"
+                      placeholder="-112.074"
+                      onChange={(e) => {
+                        const v = parseFloat(e.target.value)
+                        setLng(Number.isFinite(v) ? v : null)
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           ) : (
             <>
-              <GeofenceMap lat={lat} lng={lng} radius={radius} />
+              <GeofenceMap
+                lat={lat}
+                lng={lng}
+                radius={radius}
+                onChange={(newLat, newLng) => {
+                  setLat(newLat)
+                  setLng(newLng)
+                  setInfo('Pin moved. Click Save to persist.')
+                }}
+              />
+              <p className="-mt-2 text-xs text-sand-500">
+                Tap the map or drag the marker to adjust the pin.
+              </p>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="rounded-lg bg-sand-50 p-3">
@@ -2599,6 +2662,33 @@ function GeofenceTab({ site, onSaved }: { site: Jobsite; onSaved: () => void }) 
                   <p className="mt-1 text-sm font-medium text-sand-800">
                     {radius} m
                   </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs text-sand-600">Latitude</label>
+                  <Input
+                    type="number"
+                    step="0.000001"
+                    value={lat}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value)
+                      if (Number.isFinite(v)) setLat(v)
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-sand-600">Longitude</label>
+                  <Input
+                    type="number"
+                    step="0.000001"
+                    value={lng}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value)
+                      if (Number.isFinite(v)) setLng(v)
+                    }}
+                  />
                 </div>
               </div>
 
@@ -2633,6 +2723,17 @@ function GeofenceTab({ site, onSaved }: { site: Jobsite; onSaved: () => void }) 
                 </Button>
                 <Button variant="secondary" onClick={handleGeocode} disabled={busy}>
                   Recalculate from address
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setLat(null)
+                    setLng(null)
+                    setInfo('Coordinates cleared — place a new pin or geocode.')
+                  }}
+                  disabled={busy}
+                >
+                  Clear coordinates
                 </Button>
               </div>
             </>

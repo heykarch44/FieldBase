@@ -1,7 +1,14 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { MapContainer, TileLayer, Marker, Circle, useMap } from 'react-leaflet'
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Circle,
+  useMap,
+  useMapEvents,
+} from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
@@ -27,11 +34,25 @@ function RecenterOnChange({ lat, lng }: { lat: number; lng: number }) {
   return null
 }
 
+function ClickToPlace({
+  onPlace,
+}: {
+  onPlace: (lat: number, lng: number) => void
+}) {
+  useMapEvents({
+    click(e) {
+      onPlace(e.latlng.lat, e.latlng.lng)
+    },
+  })
+  return null
+}
+
 export interface GeofenceMapProps {
   lat: number
   lng: number
   radius: number
   height?: number
+  onChange?: (lat: number, lng: number) => void
 }
 
 export default function GeofenceMap({
@@ -39,7 +60,9 @@ export default function GeofenceMap({
   lng,
   radius,
   height = 300,
+  onChange,
 }: GeofenceMapProps) {
+  const editable = typeof onChange === 'function'
   return (
     <div style={{ height, width: '100%' }} className="overflow-hidden rounded-lg border border-sand-200">
       <MapContainer
@@ -52,7 +75,20 @@ export default function GeofenceMap({
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <Marker position={[lat, lng]} />
+        <Marker
+          position={[lat, lng]}
+          draggable={editable}
+          eventHandlers={
+            editable
+              ? {
+                  dragend(e) {
+                    const pos = (e.target as L.Marker).getLatLng()
+                    onChange!(pos.lat, pos.lng)
+                  },
+                }
+              : undefined
+          }
+        />
         <Circle
           center={[lat, lng]}
           radius={radius}
@@ -64,6 +100,7 @@ export default function GeofenceMap({
           }}
         />
         <RecenterOnChange lat={lat} lng={lng} />
+        {editable && <ClickToPlace onPlace={(la, ln) => onChange!(la, ln)} />}
       </MapContainer>
     </div>
   )
