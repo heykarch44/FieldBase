@@ -3,11 +3,20 @@ import { Session } from "@supabase/supabase-js";
 import * as LocalAuthentication from "expo-local-authentication";
 import * as SecureStore from "expo-secure-store";
 import { supabase } from "../lib/supabase";
+import { withTimeout } from "../lib/withTimeout";
 import {
   clearSessionCache,
   writeSessionCache,
 } from "../lib/sessionCache";
 import type { User, OrgMember } from "../types/database";
+
+// Hard timeout so stuck Supabase calls on bad cell don't indefinitely
+// block auth init / foreground rehydration (app appeared "hung").
+const AUTH_TIMEOUT_MS = 8000;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const EMPTY_RES = { data: null } as any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const EMPTY_SESSION = { data: { session: null } } as any;
 
 interface AuthState {
   session: Session | null;
@@ -45,8 +54,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     memberships: OrgMember[];
   }> => {
     const [userRes, memberRes] = await Promise.all([
-      supabase.from("users").select("*").eq("id", userId).single(),
-      supabase.from("org_members").select("*").eq("user_id", userId),
+      withTimeout(
+        supabase.from("users").select("*").eq("id", userId).single(),
+        AUTH_TIMEOUT_MS,
+        EMPTY_RES
+      ),
+      withTimeout(
+        supabase.from("org_members").select("*").eq("user_id", userId),
+        AUTH_TIMEOUT_MS,
+        EMPTY_RES
+      ),
     ]);
 
     return {
@@ -72,7 +89,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         SecureStore.getItemAsync(BIOMETRIC_KEY),
       ]);
 
-      const { data: { session } } = await supabase.auth.getSession();
+      const sessionRes = await withTimeout(
+        supabase.auth.getSession(),
+        AUTH_TIMEOUT_MS,
+        EMPTY_SESSION
+      );
+      const session: Session | null = sessionRes.data?.session ?? null;
       let user: User | null = null;
       let memberships: OrgMember[] = [];
       if (session?.user?.id) {
