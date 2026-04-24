@@ -102,10 +102,16 @@ export function useGeofenceRegistration(options: {
 
     // Grab current location best-effort. If it fails, we still register
     // something so the feature works — just may not be the ideal subset.
+    // Hard 4s timeout because getLastKnownPositionAsync has been known to
+    // hang on iOS after a cell handoff, which would block geofence
+    // registration entirely on re-entry from a long drive.
     let currentLat: number | null = null;
     let currentLng: number | null = null;
     try {
-      const pos = await Location.getLastKnownPositionAsync();
+      const pos = await Promise.race([
+        Location.getLastKnownPositionAsync(),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000)),
+      ]);
       if (pos) {
         currentLat = pos.coords.latitude;
         currentLng = pos.coords.longitude;

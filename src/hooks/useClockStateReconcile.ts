@@ -42,10 +42,22 @@ export function useClockStateReconcile({
         const { status } = await Location.getForegroundPermissionsAsync();
         if (status !== "granted") return;
 
-        // Fresh fix — not the stale cache.
-        const pos = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        }).catch(() => null);
+        // Fresh fix — not the stale cache. Wrapped in a hard timeout because
+        // getCurrentPositionAsync can hang for minutes during cell/GPS
+        // handoffs (common when reopening app after a long drive). If the
+        // fresh fix doesn't come in 8s, fall back to last known so we still
+        // reconcile something rather than leaving the caller awaiting forever.
+        const pos = await Promise.race([
+          Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          }),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
+        ])
+          .catch(() => null)
+          .then(async (p) => {
+            if (p) return p;
+            return await Location.getLastKnownPositionAsync().catch(() => null);
+          });
         if (!pos) return;
         const { latitude: lat, longitude: lng } = pos.coords;
 

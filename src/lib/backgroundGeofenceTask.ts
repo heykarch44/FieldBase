@@ -141,11 +141,33 @@ async function fetchLastEventAtSite(params: {
   }
 }
 
+// Overall task wall-clock budget. iOS gives ~30s to finish the handler;
+// we target 20s so we always return and release the thread even if every
+// sub-step is stuck. This is critical: if the task awaits forever, the JS
+// thread stays hot into foreground and the UI appears hung.
+const TASK_BUDGET_MS = 20_000;
+
+function withBudget<T>(p: Promise<T>, fallback: T, timeoutMs = TASK_BUDGET_MS): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), timeoutMs)),
+  ]);
+}
+
 // Define the task at module-evaluation time so the OS can dispatch to it.
 TaskManager.defineTask<GeofenceTaskBody>(GEOFENCE_TASK, async ({ data, error }) => {
-  if (error) {
-    return;
-  }
+  await withBudget(
+    handleGeofenceEvent(data, error),
+    undefined,
+    TASK_BUDGET_MS
+  );
+});
+
+async function handleGeofenceEvent(
+  data: GeofenceTaskBody | undefined,
+  error: unknown
+): Promise<void> {
+  if (error) return;
   if (!data) return;
   const { eventType, region } = data;
   if (!region || !region.identifier) return;
@@ -200,22 +222,31 @@ TaskManager.defineTask<GeofenceTaskBody>(GEOFENCE_TASK, async ({ data, error }) 
     insideGeofence: clockEvent === "clock_in",
   });
 
+  // Fire notification and manage dwell tracking in parallel so a hang in
+  // one doesn't block the others. All are best-effort — swallow errors.
+  const followups: Promise<unknown>[] = [];
   if (inserted) {
-    await fireClockNotification({
-      eventType: clockEvent,
-      jobsiteId: region.identifier,
-    });
+    followups.push(
+      fireClockNotification({
+        eventType: clockEvent,
+        jobsiteId: region.identifier,
+      }).catch(() => {})
+    );
   }
 
   // DWELL MODE: on enter, spin up background location updates so we can
   // detect the actual exit time (iOS geofence Exit is unreliable when
-  // phone is locked and stationary cell-wise). On exit from geofence
-  // (rare but it happens), stop the task if we're not inside any region.
-  // The location task itself also auto-stops when it observes the user
-  // is outside all sites for the dwell window.
+  // phone is locked and stationary cell-wise). On exit from geofence,
+  // stop the task. The location task itself also auto-stops when it
+  // observes the user is outside all sites for the dwell window.
   if (clockEvent === "clock_in") {
-    startLocationTracking().catch(() => {});
+    followups.push(startLocationTracking().catch(() => {}));
   } else {
-    stopLocationTracking().catch(() => {});
+    followups.push(stopLocationTracking().catch(() => {}));
   }
-});
+
+  // Wait for followups with a tighter budget so they don't eat the full
+  // task window. If notification scheduling or location start hangs we
+  // just return and iOS will keep the region monitored for next time.
+  await withBudget(Promise.all(followups).then(() => undefined), undefined, 8_000);
+}

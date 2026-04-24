@@ -144,7 +144,25 @@ async function insertClockOut(params: {
   return !!res && res.ok;
 }
 
+// Wall-clock budget for one location-task invocation. iOS gives ~30s;
+// we cap at 20s so we never leave the JS thread hot into foreground.
+const LOCATION_TASK_BUDGET_MS = 20_000;
+
+function withBudget<T>(p: Promise<T>, fallback: T, timeoutMs: number): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), timeoutMs)),
+  ]);
+}
+
 TaskManager.defineTask<LocationTaskBody>(LOCATION_TASK, async ({ data, error }) => {
+  await withBudget(handleLocationSample(data, error), undefined, LOCATION_TASK_BUDGET_MS);
+});
+
+async function handleLocationSample(
+  data: LocationTaskBody | undefined,
+  error: unknown
+): Promise<void> {
   if (error || !data?.locations?.length) return;
 
   const session = await readSessionCache();
@@ -229,7 +247,8 @@ TaskManager.defineTask<LocationTaskBody>(LOCATION_TASK, async ({ data, error }) 
       await stopLocationTracking();
     }
   }
-});
+  void openSiteIds;
+}
 
 export async function startLocationTracking(): Promise<void> {
   const started = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK);
