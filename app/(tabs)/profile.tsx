@@ -164,6 +164,24 @@ export default function ProfileScreen() {
           <Text style={styles.infoLabel}>Build</Text>
           <Text style={styles.infoValue}>Expo SDK 54</Text>
         </View>
+        <TouchableOpacity
+          onPress={() => router.push("/diagnostics")}
+          style={styles.settingRowBordered}
+        >
+          <View style={styles.settingLeft}>
+            <Ionicons
+              name="pulse-outline"
+              size={22}
+              color={Colors.primary[600]}
+            />
+            <Text style={styles.settingLabel}>Diagnostics</Text>
+          </View>
+          <Ionicons
+            name="chevron-forward"
+            size={20}
+            color={Colors.gray[400]}
+          />
+        </TouchableOpacity>
       </Card>
 
       {/* Logout */}
