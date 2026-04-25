@@ -1,7 +1,16 @@
 import { useState, useCallback, useEffect } from "react";
 import { supabase } from "../lib/supabase";
+import { withTimeout } from "../lib/withTimeout";
 import { useAuth } from "../providers/AuthProvider";
 import type { Jobsite } from "../types/database";
+
+// Hard timeout per query so a stuck Supabase call on bad cell can't
+// pin the sites tab on its loading spinner indefinitely — which also
+// starved useClockStateReconcile of its sites list and prevented
+// foreground auto clock-in.
+const SITES_QUERY_TIMEOUT_MS = 8_000;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const EMPTY: any = { data: null, error: null };
 
 export interface AssignedSiteItem extends Jobsite {
   open_orders_count: number;
@@ -21,10 +30,14 @@ export function useAssignedSites() {
       setError(null);
 
       // 1. Get all jobsite_ids assigned to this tech
-      const { data: assignments, error: assignErr } = await supabase
-        .from("jobsite_assignees")
-        .select("jobsite_id")
-        .eq("user_id", user.id);
+      const { data: assignments, error: assignErr } = await withTimeout(
+        supabase
+          .from("jobsite_assignees")
+          .select("jobsite_id")
+          .eq("user_id", user.id),
+        SITES_QUERY_TIMEOUT_MS,
+        EMPTY
+      );
 
       if (assignErr) throw assignErr;
 
@@ -39,11 +52,15 @@ export function useAssignedSites() {
       );
 
       // 2. Fetch the actual jobsites
-      const { data: jobsitesData, error: jobsitesErr } = await supabase
-        .from("jobsites")
-        .select("*")
-        .in("id", siteIds)
-        .order("name");
+      const { data: jobsitesData, error: jobsitesErr } = await withTimeout(
+        supabase
+          .from("jobsites")
+          .select("*")
+          .in("id", siteIds)
+          .order("name"),
+        SITES_QUERY_TIMEOUT_MS,
+        EMPTY
+      );
 
       if (jobsitesErr) throw jobsitesErr;
 
@@ -56,10 +73,14 @@ export function useAssignedSites() {
       }
 
       // 3. Fetch open orders counts (status not in closed set)
-      const { data: ordersData } = await supabase
-        .from("service_orders")
-        .select("jobsite_id, status")
-        .in("jobsite_id", siteIds);
+      const { data: ordersData } = await withTimeout(
+        supabase
+          .from("service_orders")
+          .select("jobsite_id, status")
+          .in("jobsite_id", siteIds),
+        SITES_QUERY_TIMEOUT_MS,
+        EMPTY
+      );
 
       const openOrdersMap = new Map<string, number>();
       if (ordersData) {
@@ -77,13 +98,17 @@ export function useAssignedSites() {
 
       // 4. Fetch next scheduled visit date per site (from today forward)
       const today = new Date().toISOString().split("T")[0];
-      const { data: visitsData } = await supabase
-        .from("visits")
-        .select("jobsite_id, scheduled_date, status")
-        .in("jobsite_id", siteIds)
-        .gte("scheduled_date", today)
-        .in("status", ["scheduled", "en_route", "in_progress"])
-        .order("scheduled_date", { ascending: true });
+      const { data: visitsData } = await withTimeout(
+        supabase
+          .from("visits")
+          .select("jobsite_id, scheduled_date, status")
+          .in("jobsite_id", siteIds)
+          .gte("scheduled_date", today)
+          .in("status", ["scheduled", "en_route", "in_progress"])
+          .order("scheduled_date", { ascending: true }),
+        SITES_QUERY_TIMEOUT_MS,
+        EMPTY
+      );
 
       const nextVisitMap = new Map<string, string>();
       if (visitsData) {

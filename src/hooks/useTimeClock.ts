@@ -5,6 +5,20 @@ import uuid from "react-native-uuid";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../providers/AuthProvider";
 import { haversineDistance } from "../lib/geo";
+import { withTimeout } from "../lib/withTimeout";
+
+// On bad cell, an unguarded Supabase query left the TimeClockCard
+// stuck on its loading spinner indefinitely, and tapping clock_in
+// would hang on the insert. Force restart was the only fix. These
+// timeouts let the UI fail fast and recover instead of wedging.
+const CLOCK_QUERY_TIMEOUT_MS = 8_000;
+const CLOCK_INSERT_TIMEOUT_MS = 12_000;
+const GPS_TIMEOUT_MS = 6_000;
+const PHOTO_UPLOAD_TIMEOUT_MS = 20_000;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const EMPTY_RES = { data: null, error: null } as any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const TIMEOUT_ERR = { error: { message: "Request timed out — check connection" } } as any;
 
 export interface TimeClockEvent {
   id: string;
@@ -105,18 +119,23 @@ export function useTimeClock(jobsiteId: string | null): UseTimeClockResult {
       return;
     }
     setError(null);
-    const { data, error: fetchErr } = await supabase
-      .from("time_clock_events")
-      .select("*")
-      .eq("jobsite_id", jobsiteId)
-      .eq("user_id", user.id)
-      .order("occurred_at", { ascending: false })
-      .limit(50);
+    const { data, error: fetchErr } = await withTimeout(
+      supabase
+        .from("time_clock_events")
+        .select("*")
+        .eq("jobsite_id", jobsiteId)
+        .eq("user_id", user.id)
+        .order("occurred_at", { ascending: false })
+        .limit(50),
+      CLOCK_QUERY_TIMEOUT_MS,
+      EMPTY_RES
+    );
     if (fetchErr) {
       setError(fetchErr.message);
-    } else {
-      setEvents((data ?? []) as TimeClockEvent[]);
+    } else if (data) {
+      setEvents(data as TimeClockEvent[]);
     }
+    // Always release loading even on timeout so the spinner can't pin.
     setLoading(false);
   }, [user, jobsiteId]);
 
@@ -134,17 +153,30 @@ export function useTimeClock(jobsiteId: string | null): UseTimeClockResult {
       }
       const orgId = user.active_org_id;
 
-      // Best-effort GPS fix
+      // Best-effort GPS fix — race against a hard timeout because
+      // getCurrentPositionAsync can hang for minutes during cell/GPS
+      // handoffs. Falling back to last-known is fine; the event still
+      // records without GPS rather than blocking the clock-in tap.
       let lat: number | null = null;
       let lng: number | null = null;
       let accuracy: number | null = null;
       try {
-        const pos = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-        lat = pos.coords.latitude;
-        lng = pos.coords.longitude;
-        accuracy = pos.coords.accuracy ?? null;
+        const pos = await Promise.race([
+          Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          }),
+          new Promise<null>((resolve) =>
+            setTimeout(() => resolve(null), GPS_TIMEOUT_MS)
+          ),
+        ]).catch(() => null);
+        const fix =
+          pos ??
+          (await Location.getLastKnownPositionAsync().catch(() => null));
+        if (fix) {
+          lat = fix.coords.latitude;
+          lng = fix.coords.longitude;
+          accuracy = fix.coords.accuracy ?? null;
+        }
       } catch {
         // ignore — event still records without GPS
       }
@@ -163,30 +195,39 @@ export function useTimeClock(jobsiteId: string | null): UseTimeClockResult {
 
       let photoPath: string | null = null;
       if (params.photoUri) {
-        photoPath = await uploadPhoto({
-          orgId,
-          jobsiteId: params.site.jobsiteId,
-          photoUri: params.photoUri,
-          mime: params.photoMime ?? "image/jpeg",
-          ext: params.photoExt ?? "jpg",
-        });
+        photoPath = await Promise.race([
+          uploadPhoto({
+            orgId,
+            jobsiteId: params.site.jobsiteId,
+            photoUri: params.photoUri,
+            mime: params.photoMime ?? "image/jpeg",
+            ext: params.photoExt ?? "jpg",
+          }),
+          new Promise<null>((resolve) =>
+            setTimeout(() => resolve(null), PHOTO_UPLOAD_TIMEOUT_MS)
+          ),
+        ]).catch(() => null);
       }
 
-      const { error: insertErr } = await supabase.from("time_clock_events").insert({
-        org_id: orgId,
-        user_id: user.id,
-        jobsite_id: params.site.jobsiteId,
-        event_type: eventType,
-        source: "manual",
-        occurred_at: new Date().toISOString(),
-        lat,
-        lng,
-        accuracy_m: accuracy,
-        distance_from_site_m: distance,
-        inside_geofence: insideGeofence,
-        note: params.note ?? null,
-        photo_storage_path: photoPath,
-      });
+      const { error: insertErr } = await withTimeout(
+        supabase.from("time_clock_events").insert({
+          org_id: orgId,
+          user_id: user.id,
+          jobsite_id: params.site.jobsiteId,
+          event_type: eventType,
+          source: "manual",
+          occurred_at: new Date().toISOString(),
+          lat,
+          lng,
+          accuracy_m: accuracy,
+          distance_from_site_m: distance,
+          inside_geofence: insideGeofence,
+          note: params.note ?? null,
+          photo_storage_path: photoPath,
+        }),
+        CLOCK_INSERT_TIMEOUT_MS,
+        TIMEOUT_ERR
+      );
 
       if (insertErr) {
         return { error: insertErr.message };

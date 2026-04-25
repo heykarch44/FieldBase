@@ -18,6 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../src/lib/supabase";
+import { withTimeout } from "../../src/lib/withTimeout";
 import { Card } from "../../src/components/Card";
 import { Colors } from "../../src/constants/theme";
 import { useOrg } from "../../src/providers/OrgProvider";
@@ -197,36 +198,55 @@ export default function SiteDetailScreen() {
     if (!id) return;
     setNotFound(false);
 
+    // Hard timeout per query so a stuck connection on bad cell can't
+    // pin the screen on its loading spinner forever.
+    const QUERY_TIMEOUT_MS = 8_000;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const EMPTY: any = { data: null };
     const [siteRes, ordersRes, visitsRes, equipmentRes] =
       await Promise.all([
-        supabase.from("jobsites").select("*").eq("id", id).single(),
-        supabase
-          .from("service_orders")
-          .select("*")
-          .eq("jobsite_id", id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("visits")
-          .select("*")
-          .eq("jobsite_id", id)
-          .order("scheduled_date", { ascending: false }),
-        supabase
-          .from("equipment")
-          .select("*")
-          .eq("jobsite_id", id)
-          .order("name"),
+        withTimeout(
+          supabase.from("jobsites").select("*").eq("id", id).single(),
+          QUERY_TIMEOUT_MS,
+          EMPTY
+        ),
+        withTimeout(
+          supabase
+            .from("service_orders")
+            .select("*")
+            .eq("jobsite_id", id)
+            .order("created_at", { ascending: false }),
+          QUERY_TIMEOUT_MS,
+          EMPTY
+        ),
+        withTimeout(
+          supabase
+            .from("visits")
+            .select("*")
+            .eq("jobsite_id", id)
+            .order("scheduled_date", { ascending: false }),
+          QUERY_TIMEOUT_MS,
+          EMPTY
+        ),
+        withTimeout(
+          supabase
+            .from("equipment")
+            .select("*")
+            .eq("jobsite_id", id)
+            .order("name"),
+          QUERY_TIMEOUT_MS,
+          EMPTY
+        ),
       ]);
 
-    if (!siteRes.data) {
-      setNotFound(true);
-      setLoading(false);
-      return;
+    // If the site query timed out, treat as transient — don't flip to
+    // notFound. Just release the spinner so user can pull-to-refresh.
+    if (siteRes.data) {
+      setSite(siteRes.data as Jobsite);
+      setServiceOrders((ordersRes.data ?? []) as ServiceOrder[]);
+      setVisits((visitsRes.data ?? []) as Visit[]);
+      setEquipment((equipmentRes.data ?? []) as Equipment[]);
     }
-
-    setSite(siteRes.data as Jobsite);
-    setServiceOrders((ordersRes.data ?? []) as ServiceOrder[]);
-    setVisits((visitsRes.data ?? []) as Visit[]);
-    setEquipment((equipmentRes.data ?? []) as Equipment[]);
     setLoading(false);
   }, [id]);
 
