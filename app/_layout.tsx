@@ -15,6 +15,8 @@ import "../src/lib/backgroundLocationTask";
 import { useGeofenceRegistration } from "../src/hooks/useGeofenceRegistration";
 import { useGeofencePermissions } from "../src/hooks/useGeofencePermissions";
 import { useClockStateReconcile } from "../src/hooks/useClockStateReconcile";
+import { startLocationTracking } from "../src/lib/backgroundLocationTask";
+import { appendDiag } from "../src/lib/sessionCache";
 
 function GeofenceBootstrap({ children }: { children: React.ReactNode }) {
   const { session } = useAuth();
@@ -34,6 +36,21 @@ function GeofenceBootstrap({ children }: { children: React.ReactNode }) {
   }, [session, loading, foreground, background, requestPermissions]);
 
   useGeofenceRegistration({ enabled: !!session && background });
+
+  // Kick the dwell-mode location task on as soon as we have a session +
+  // background permission. Previously it only started on geofence Enter,
+  // which meant if iOS never fired Enter (or the user signed in while
+  // already at a site) we'd never start sampling — and never detect Exit.
+  // Starting at login means we always have cached samples for back-dating.
+  React.useEffect(() => {
+    if (!session || !background) return;
+    startLocationTracking()
+      .catch((e) =>
+        appendDiag("bootstrap", `start-location-fail ${String(e)}`).catch(
+          () => undefined
+        )
+      );
+  }, [session, background]);
 
   // When the app comes to foreground, check if we're still inside any site
   // we're clocked in to. If not, write the missing clock_out. Covers the

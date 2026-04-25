@@ -6,13 +6,16 @@
 // unacceptable.
 //
 // Strategy:
-//   - Geofence Enter still handles clock_in (existing task).
-//   - Geofence Enter ALSO spins up this task (startLocationUpdatesAsync).
-//   - While running, iOS delivers location samples every ~30s.
+//   - Geofence Enter spins up this task (startLocationUpdatesAsync).
+//   - While running, iOS delivers location samples whenever the user moves
+//     beyond `distanceInterval` (10m) — much more responsive than 30s polls.
+//   - Each sample is persisted to SecureStore so the foreground reconcile
+//     and geofence task can back-date events using the earliest evidence.
 //   - On each sample we check: am I outside every registered site?
 //     If yes for >= DWELL_EXIT_SECS seconds, write clock_out for each
-//     still-open site and stop this task (back to zero-battery mode).
-//   - If a new Enter happens while this task is running we just keep going.
+//     still-open site (back-dated to the first-outside timestamp).
+//   - We do NOT auto-stop while the user has any open clock_in. Keeping
+//     the task alive keeps iOS waking us, which is the whole point.
 
 import * as Location from "expo-location";
 import * as TaskManager from "expo-task-manager";
@@ -21,16 +24,30 @@ import {
   readSessionCache,
   readCachedSites,
   readCachedClockLabels,
+  writeLastPosition,
+  appendSample,
+  readSiteOutsideMap,
+  writeSiteOutsideMap,
+  appendDiag,
 } from "./sessionCache";
 import { haversineDistance } from "./geo";
 
-async function fireClockOutNotification(siteName: string): Promise<void> {
+async function fireClockOutNotification(
+  siteName: string,
+  occurredAtIso: string
+): Promise<void> {
   try {
     const labels = await readCachedClockLabels();
+    const occurredMs = Date.parse(occurredAtIso);
+    const stale =
+      Number.isFinite(occurredMs) && Date.now() - occurredMs > 120_000;
+    const body = stale
+      ? `${siteName} (recorded ${formatRelative(occurredMs)})`
+      : siteName;
     await Notifications.scheduleNotificationAsync({
       content: {
         title: labels.clockOut,
-        body: siteName,
+        body,
         sound: "default",
       },
       trigger: null,
@@ -38,6 +55,15 @@ async function fireClockOutNotification(siteName: string): Promise<void> {
   } catch {
     // best-effort
   }
+}
+
+function formatRelative(ms: number): string {
+  const diff = Math.round((Date.now() - ms) / 60_000);
+  if (diff < 1) return "just now";
+  if (diff === 1) return "1 min ago";
+  if (diff < 60) return `${diff} min ago`;
+  const hours = Math.floor(diff / 60);
+  return hours === 1 ? "1 hr ago" : `${hours} hr ago`;
 }
 
 export const LOCATION_TASK = "fieldiq-background-location";
@@ -54,12 +80,6 @@ const SUPABASE_URL =
   process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
 const SUPABASE_ANON_KEY =
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";
-
-// Track first-outside timestamp per site across invocations. Persisted in a
-// module-level map — survives background task wake-ups within a single
-// process. If the process dies we lose it and start fresh, which just means
-// the next dwell window restarts (still ends up writing clock_out).
-const firstOutsideAt = new Map<string, number>();
 
 interface LocationTaskBody {
   locations?: Location.LocationObject[];
@@ -89,12 +109,12 @@ async function fetchLastEventAtSite(params: {
   userId: string;
   jobsiteId: string;
   accessToken: string;
-}): Promise<{ event_type: string } | null> {
+}): Promise<{ event_type: string; occurred_at: string } | null> {
   const url =
     `${SUPABASE_URL}/rest/v1/time_clock_events` +
     `?user_id=eq.${params.userId}` +
     `&jobsite_id=eq.${params.jobsiteId}` +
-    `&select=event_type` +
+    `&select=event_type,occurred_at` +
     `&order=occurred_at.desc` +
     `&limit=1`;
   const res = await timedFetch(url, {
@@ -105,7 +125,10 @@ async function fetchLastEventAtSite(params: {
   });
   if (!res || !res.ok) return null;
   try {
-    const rows = (await res.json()) as Array<{ event_type: string }>;
+    const rows = (await res.json()) as Array<{
+      event_type: string;
+      occurred_at: string;
+    }>;
     return rows[0] ?? null;
   } catch {
     return null;
@@ -117,20 +140,26 @@ async function insertClockOut(params: {
   orgId: string;
   jobsiteId: string;
   accessToken: string;
+  occurredAtIso: string;
   lat: number;
   lng: number;
+  accuracyM: number | null;
+  distanceFromSiteM: number;
 }): Promise<boolean> {
-  const body = {
+  const body: Record<string, unknown> = {
     org_id: params.orgId,
     user_id: params.userId,
     jobsite_id: params.jobsiteId,
     event_type: "clock_out",
     source: "dwell_exit",
-    occurred_at: new Date().toISOString(),
+    occurred_at: params.occurredAtIso,
     lat: params.lat,
     lng: params.lng,
     inside_geofence: false,
+    distance_from_site_m: params.distanceFromSiteM,
   };
+  if (params.accuracyM != null) body.accuracy_m = params.accuracyM;
+
   const res = await timedFetch(`${SUPABASE_URL}/rest/v1/time_clock_events`, {
     method: "POST",
     headers: {
@@ -163,26 +192,69 @@ async function handleLocationSample(
   data: LocationTaskBody | undefined,
   error: unknown
 ): Promise<void> {
-  if (error || !data?.locations?.length) return;
-
-  const session = await readSessionCache();
-  if (!session || !session.orgId) return;
-
-  const sites = await readCachedSites();
-  if (sites.length === 0) {
-    await stopLocationTracking();
+  if (error) {
+    await appendDiag("dwell", `task error: ${String(error)}`);
+    return;
+  }
+  if (!data?.locations?.length) {
+    await appendDiag("dwell", "no-locations");
     return;
   }
 
-  // Use the most recent sample (iOS can deliver a batch).
-  const sample = data.locations[data.locations.length - 1];
+  const session = await readSessionCache();
+  if (!session || !session.orgId) {
+    await appendDiag("dwell", "no-session");
+    return;
+  }
+
+  const sites = await readCachedSites();
+  if (sites.length === 0) {
+    await appendDiag("dwell", "no-sites");
+    return;
+  }
+
+  // Persist EVERY sample we receive — including older ones in a batch
+  // that iOS deferred. These are what foreground reconcile uses to
+  // back-date events. Most-recent first, but appendSample preserves
+  // insertion order so we just pass them in chronological order.
+  const sortedSamples = [...data.locations].sort(
+    (a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0)
+  );
+  const receivedAt = Date.now();
+  for (const s of sortedSamples) {
+    const sampledAt = s.timestamp ?? receivedAt;
+    const cached = {
+      lat: s.coords.latitude,
+      lng: s.coords.longitude,
+      accuracyM: s.coords.accuracy ?? null,
+      sampledAt,
+      receivedAt,
+    };
+    await appendSample(cached);
+    await writeLastPosition(cached);
+  }
+
+  await appendDiag(
+    "dwell",
+    `samples=${sortedSamples.length} sites=${sites.length}`
+  );
+
+  // Use the most recent sample for the dwell decision.
+  const sample = sortedSamples[sortedSamples.length - 1]!;
   const { latitude: lat, longitude: lng } = sample.coords;
-  const now = Date.now();
+  const sampleTs = sample.timestamp ?? receivedAt;
+  const sampleAccuracy = sample.coords.accuracy ?? null;
+
+  // Read the persisted "first outside" map. Persisting through SecureStore
+  // means we keep state across process kills — critical because iOS can
+  // recreate the JS context between samples on a long shift.
+  const outsideMap = await readSiteOutsideMap();
+  let outsideMapDirty = false;
 
   let anyoneInside = false;
-  const openSiteIds: string[] = [];
 
-  // First pass: figure out who we're inside vs outside.
+  // First pass: figure out who we're inside vs outside, and write events
+  // for any site whose dwell window is satisfied.
   for (const site of sites) {
     const distance = haversineDistance(lat, lng, site.lat, site.lng);
     const inside = distance <= site.radius_m;
@@ -190,7 +262,10 @@ async function handleLocationSample(
 
     if (inside) {
       anyoneInside = true;
-      firstOutsideAt.delete(site.id);
+      if (outsideMap[site.id] != null) {
+        delete outsideMap[site.id];
+        outsideMapDirty = true;
+      }
       continue;
     }
     if (!outsideBuffered) {
@@ -200,83 +275,131 @@ async function handleLocationSample(
     }
 
     // We are definitely outside this site.
-    const firstAt = firstOutsideAt.get(site.id);
+    const firstAt = outsideMap[site.id];
     if (firstAt == null) {
-      firstOutsideAt.set(site.id, now);
+      // Use the earliest sample we have showing user outside (might be older
+      // than this batch if the OS deferred deliveries).
+      let earliestOutside = sampleTs;
+      for (const s of sortedSamples) {
+        const d = haversineDistance(
+          s.coords.latitude,
+          s.coords.longitude,
+          site.lat,
+          site.lng
+        );
+        if (d > site.radius_m + EXIT_BUFFER_M) {
+          const t = s.timestamp ?? receivedAt;
+          if (t < earliestOutside) earliestOutside = t;
+        }
+      }
+      outsideMap[site.id] = earliestOutside;
+      outsideMapDirty = true;
       continue;
     }
-    const outsideFor = (now - firstAt) / 1000;
+    const outsideFor = (Date.now() - firstAt) / 1000;
     if (outsideFor < DWELL_EXIT_SECS) continue;
 
     // Dwell satisfied. If the user has an open clock_in at this site, write
-    // a clock_out. Remember to clear the tracker regardless.
-    firstOutsideAt.delete(site.id);
-
+    // a clock_out (back-dated to firstAt — when they ACTUALLY left).
     const last = await fetchLastEventAtSite({
       userId: session.userId,
       jobsiteId: site.id,
       accessToken: session.accessToken,
     });
     if (last?.event_type === "clock_in") {
+      const occurredAtIso = new Date(firstAt).toISOString();
       const ok = await insertClockOut({
         userId: session.userId,
         orgId: session.orgId,
         jobsiteId: site.id,
         accessToken: session.accessToken,
+        occurredAtIso,
         lat,
         lng,
+        accuracyM: sampleAccuracy,
+        distanceFromSiteM: distance,
       });
+      await appendDiag(
+        "dwell",
+        `clock_out ok=${ok} site=${site.id} firstOutside=${new Date(firstAt).toISOString()}`
+      );
       if (!ok) {
-        // Retry next tick by not removing from firstOutsideAt. Put a stale
-        // "first" time back so we immediately retry next sample.
-        firstOutsideAt.set(site.id, now - DWELL_EXIT_SECS * 1000);
+        // Retry next tick by leaving entry in map but re-arming so we'll
+        // try again immediately on the next sample.
+        outsideMap[site.id] = Date.now() - DWELL_EXIT_SECS * 1000 - 1000;
       } else {
-        await fireClockOutNotification(site.name ?? "Site");
+        delete outsideMap[site.id];
+        await fireClockOutNotification(site.name ?? "Site", occurredAtIso);
       }
-      openSiteIds.push(site.id);
+      outsideMapDirty = true;
+    } else {
+      // Nothing to close — clear so we don't keep retrying.
+      delete outsideMap[site.id];
+      outsideMapDirty = true;
     }
   }
 
-  // If we're not inside any site AND we closed out everything (or nothing
-  // was open), stop the task to save battery.
-  if (!anyoneInside) {
-    // Check if any site still has an open clock_in we haven't closed.
-    // If firstOutsideAt is empty AND we didn't just close one, we're idle.
-    const stillPending = firstOutsideAt.size > 0;
-    if (!stillPending) {
-      await stopLocationTracking();
-    }
+  if (outsideMapDirty) {
+    await writeSiteOutsideMap(outsideMap);
   }
-  void openSiteIds;
+
+  // We INTENTIONALLY do not stop the task even when outside everything.
+  // iOS gives us "significant location changes" semantics with the
+  // AutomotiveNavigation activity type — it pauses internally while the
+  // device is stationary, so leaving the task running costs very little.
+  // Keeping it running is what makes geofence Enter at the NEXT site
+  // detectable in real time even when iOS holds the synthetic Enter event.
+  void anyoneInside;
 }
 
 export async function startLocationTracking(): Promise<void> {
-  const started = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK);
-  if (started) return;
+  try {
+    const started = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK);
+    if (started) {
+      await appendDiag("dwell", "start: already-running");
+      return;
+    }
 
-  await Location.startLocationUpdatesAsync(LOCATION_TASK, {
-    accuracy: Location.Accuracy.Balanced,
-    // ~30 sec between samples while moving; iOS throttles when stationary
-    // so battery cost is much lower than the numbers suggest.
-    timeInterval: 30_000,
-    distanceInterval: 25, // meters
-    // Keep task alive when user swipes the app away. Without this iOS kills
-    // it on force-close and we lose exit detection.
-    pausesUpdatesAutomatically: false,
-    showsBackgroundLocationIndicator: true,
-    foregroundService: {
-      // Android only; required when asking for background location.
-      notificationTitle: "FieldIQ",
-      notificationBody:
-        "Tracking location to detect when you leave a job site.",
-    },
-    activityType: Location.ActivityType.AutomotiveNavigation,
-  });
+    await Location.startLocationUpdatesAsync(LOCATION_TASK, {
+      // Balanced is the sweet spot — lower than this and iOS won't deliver
+      // samples often enough; higher and battery dies. AutomotiveNavigation
+      // tells iOS to keep the GPS warm during driving, which is exactly when
+      // we need responsiveness for arrive/leave events.
+      accuracy: Location.Accuracy.Balanced,
+      // Smaller distance interval = more samples = more reliable dwell
+      // detection. iOS still throttles when stationary so battery cost
+      // is bounded.
+      distanceInterval: 10, // meters
+      // timeInterval is iOS-ignored when distanceInterval is set, but
+      // Android honors it.
+      timeInterval: 30_000,
+      // Keep task alive when user swipes the app away. Without this iOS kills
+      // it on force-close and we lose exit detection.
+      pausesUpdatesAutomatically: false,
+      showsBackgroundLocationIndicator: true,
+      foregroundService: {
+        // Android only; required when asking for background location.
+        notificationTitle: "FieldIQ",
+        notificationBody:
+          "Tracking location to detect when you leave a job site.",
+      },
+      activityType: Location.ActivityType.AutomotiveNavigation,
+    });
+    await appendDiag("dwell", "start: ok");
+  } catch (e) {
+    await appendDiag("dwell", `start: error ${String(e)}`);
+  }
 }
 
 export async function stopLocationTracking(): Promise<void> {
-  const started = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK);
-  if (!started) return;
-  await Location.stopLocationUpdatesAsync(LOCATION_TASK);
-  firstOutsideAt.clear();
+  try {
+    const started = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK);
+    if (!started) return;
+    await Location.stopLocationUpdatesAsync(LOCATION_TASK);
+    // Don't clear the persisted outside-map here — foreground reconcile
+    // might still want to inspect it.
+    await appendDiag("dwell", "stop: ok");
+  } catch (e) {
+    await appendDiag("dwell", `stop: error ${String(e)}`);
+  }
 }

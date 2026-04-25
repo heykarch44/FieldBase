@@ -4,7 +4,11 @@ import * as TaskManager from "expo-task-manager";
 import { GEOFENCE_TASK } from "../lib/backgroundGeofenceTask";
 import { haversineDistance } from "../lib/geo";
 import { useAssignedSites } from "./useAssignedSites";
-import { writeCachedSites, writeCachedClockLabels } from "../lib/sessionCache";
+import {
+  writeCachedSites,
+  writeCachedClockLabels,
+  appendDiag,
+} from "../lib/sessionCache";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../providers/AuthProvider";
 
@@ -170,15 +174,36 @@ export function useGeofenceRegistration(options: {
 
     if (regions.length === 0) {
       countRef.current = 0;
+      await appendDiag("register", "no-regions-with-coords").catch(() => {});
       return;
     }
 
-    try {
-      await Location.startGeofencingAsync(GEOFENCE_TASK, regions);
-      countRef.current = regions.length;
-    } catch {
-      countRef.current = 0;
+    // Retry registration up to 3 times. iOS occasionally throws
+    // CLERROR (kCLErrorRegionMonitoringFailure) right after returning from
+    // Settings or after a permission upgrade — a short retry usually clears
+    // it. Without retry the entire system goes silent until next app launch.
+    let lastError: unknown = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await Location.startGeofencingAsync(GEOFENCE_TASK, regions);
+        countRef.current = regions.length;
+        await appendDiag(
+          "register",
+          `ok attempt=${attempt} regions=${regions.length}`
+        ).catch(() => {});
+        return;
+      } catch (e) {
+        lastError = e;
+        await appendDiag(
+          "register",
+          `fail attempt=${attempt} err=${String(e)}`
+        ).catch(() => {});
+        // Backoff before retry: 500ms, 2s.
+        await new Promise((r) => setTimeout(r, attempt === 1 ? 500 : 2000));
+      }
     }
+    countRef.current = 0;
+    void lastError;
   }, [sites, options.enabled]);
 
   useEffect(() => {
