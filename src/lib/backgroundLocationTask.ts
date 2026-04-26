@@ -26,6 +26,7 @@ import {
   readCachedClockLabels,
   writeLastPosition,
   appendSample,
+  readSamples,
   readSiteOutsideMap,
   writeSiteOutsideMap,
   appendDiag,
@@ -57,6 +58,31 @@ async function fireClockOutNotification(
   }
 }
 
+async function fireClockInNotification(
+  siteName: string,
+  occurredAtIso: string
+): Promise<void> {
+  try {
+    const labels = await readCachedClockLabels();
+    const occurredMs = Date.parse(occurredAtIso);
+    const stale =
+      Number.isFinite(occurredMs) && Date.now() - occurredMs > 120_000;
+    const body = stale
+      ? `${siteName} (recorded ${formatRelative(occurredMs)})`
+      : siteName;
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: labels.clockIn,
+        body,
+        sound: "default",
+      },
+      trigger: null,
+    });
+  } catch {
+    // best-effort
+  }
+}
+
 function formatRelative(ms: number): string {
   const diff = Math.round((Date.now() - ms) / 60_000);
   if (diff < 1) return "just now";
@@ -69,12 +95,26 @@ function formatRelative(ms: number): string {
 export const LOCATION_TASK = "fieldiq-background-location";
 
 // How far past the radius you must be before we consider you "outside"
-// (avoids GPS jitter at the edge clocking you out).
-const EXIT_BUFFER_M = 50;
+// (avoids GPS jitter at the edge clocking you out). Tightened from 50m
+// because Home-style 35m radii were producing 85m total before exit could
+// fire — large enough that GPS drift kept users "inside" for 10+ minutes
+// after a real departure.
+const EXIT_BUFFER_M = 15;
 
 // How long you must be continuously outside all sites before we write
 // the clock_out. Catches quick trips to the truck for tools.
 const DWELL_EXIT_SECS = 120;
+
+// Number of consecutive most-recent samples that must all be inside a
+// site's radius before we declare a dwell-based ENTER. Mirrors the
+// foreground reconcile's "confidently inside" check but uses sample
+// continuity instead of GPS-accuracy padding.
+const ENTER_CONSECUTIVE = 3;
+
+// Don't insert a clock_in if one already exists for this user+site within
+// this many seconds (regardless of source). Protects against races with
+// foreground reconcile and the iOS geofence Enter callback.
+const ENTER_DEDUP_SECS = 60;
 
 const SUPABASE_URL =
   process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
@@ -133,6 +173,81 @@ async function fetchLastEventAtSite(params: {
   } catch {
     return null;
   }
+}
+
+// Returns the user's most recent event across ALL jobsites. Used to enforce
+// the one-clock-at-a-time invariant before a dwell ENTER inserts a clock_in:
+// if the most recent event anywhere is a clock_in, the user is still on the
+// clock somewhere else and we must not double-clock them in.
+async function fetchLastEventAnywhere(params: {
+  userId: string;
+  accessToken: string;
+}): Promise<{
+  event_type: string;
+  occurred_at: string;
+  jobsite_id: string | null;
+} | null> {
+  const url =
+    `${SUPABASE_URL}/rest/v1/time_clock_events` +
+    `?user_id=eq.${params.userId}` +
+    `&select=event_type,occurred_at,jobsite_id` +
+    `&order=occurred_at.desc` +
+    `&limit=1`;
+  const res = await timedFetch(url, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${params.accessToken}`,
+    },
+  });
+  if (!res || !res.ok) return null;
+  try {
+    const rows = (await res.json()) as Array<{
+      event_type: string;
+      occurred_at: string;
+      jobsite_id: string | null;
+    }>;
+    return rows[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function insertClockIn(params: {
+  userId: string;
+  orgId: string;
+  jobsiteId: string;
+  accessToken: string;
+  occurredAtIso: string;
+  lat: number;
+  lng: number;
+  accuracyM: number | null;
+  distanceFromSiteM: number;
+}): Promise<boolean> {
+  const body: Record<string, unknown> = {
+    org_id: params.orgId,
+    user_id: params.userId,
+    jobsite_id: params.jobsiteId,
+    event_type: "clock_in",
+    source: "dwell_enter",
+    occurred_at: params.occurredAtIso,
+    lat: params.lat,
+    lng: params.lng,
+    inside_geofence: true,
+    distance_from_site_m: params.distanceFromSiteM,
+  };
+  if (params.accuracyM != null) body.accuracy_m = params.accuracyM;
+
+  const res = await timedFetch(`${SUPABASE_URL}/rest/v1/time_clock_events`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${params.accessToken}`,
+      Prefer: "return=minimal",
+    },
+    body: JSON.stringify(body),
+  });
+  return !!res && res.ok;
 }
 
 async function insertClockOut(params: {
@@ -251,14 +366,37 @@ async function handleLocationSample(
   const outsideMap = await readSiteOutsideMap();
   let outsideMapDirty = false;
 
+  // Pull the rolling sample buffer once. We use it for two checks below:
+  //   - "any sample in the last 2 min outside the radius" → fire exit fast
+  //     instead of waiting for 3 consecutive samples to all line up
+  //   - "the most recent N samples are all inside" → declare ENTER even
+  //     when iOS swallowed the geofence callback
+  const recentSamples = await readSamples();
+
+  // Whether the user is currently on the clock anywhere. Loaded lazily on
+  // first ENTER candidate so the common (idle, not-near-anything) case
+  // doesn't pay the network cost.
+  let anywhereLoaded = false;
+  let anywhereOpen: boolean | null = null;
+
   let anyoneInside = false;
 
   // First pass: figure out who we're inside vs outside, and write events
-  // for any site whose dwell window is satisfied.
+  // for any site whose dwell window is satisfied OR whose ENTER criteria
+  // are met.
   for (const site of sites) {
     const distance = haversineDistance(lat, lng, site.lat, site.lng);
     const inside = distance <= site.radius_m;
     const outsideBuffered = distance > site.radius_m + EXIT_BUFFER_M;
+
+    // Per-evaluation diagnostic line. Lets us see, after the fact, whether
+    // the dwell task was actually running and how it judged each site —
+    // which is the only way to debug "the app was foreground but nothing
+    // fired" reports.
+    await appendDiag(
+      "dwell",
+      `eval site=${site.id} distance=${Math.round(distance)}m inside=${inside}`
+    );
 
     if (inside) {
       anyoneInside = true;
@@ -266,17 +404,112 @@ async function handleLocationSample(
         delete outsideMap[site.id];
         outsideMapDirty = true;
       }
+
+      // ENTER detection: if the last ENTER_CONSECUTIVE samples (across all
+      // recent batches, not just this one) are all inside this site's
+      // radius, and the user has no open clock_in anywhere, write a
+      // back-dated clock_in. Mirrors what foreground reconcile would do
+      // on app open, but doesn't require the user to open the app.
+      const tail = recentSamples.slice(-ENTER_CONSECUTIVE);
+      const haveEnough = tail.length >= ENTER_CONSECUTIVE;
+      const allInside =
+        haveEnough &&
+        tail.every(
+          (s) =>
+            haversineDistance(s.lat, s.lng, site.lat, site.lng) <= site.radius_m
+        );
+      if (!allInside) continue;
+
+      // Dedup: skip if a clock_in for this user+site already landed in the
+      // last ENTER_DEDUP_SECS seconds (e.g. iOS Enter callback got there
+      // first, or foreground reconcile beat us).
+      const last = await fetchLastEventAtSite({
+        userId: session.userId,
+        jobsiteId: site.id,
+        accessToken: session.accessToken,
+      });
+      if (last && last.event_type === "clock_in") {
+        const lastMs = Date.parse(last.occurred_at);
+        const ageSecs = (Date.now() - lastMs) / 1000;
+        if (Number.isFinite(lastMs) && ageSecs < ENTER_DEDUP_SECS) continue;
+        // Already on the clock here from an earlier event we haven't seen
+        // a corresponding clock_out for — leave it alone.
+        continue;
+      }
+
+      // One-clock-at-a-time invariant: if the user has an open clock_in at
+      // any other site, don't double-clock them in. The dwell exit logic
+      // (above on prior ticks) is what should close the other site first.
+      if (!anywhereLoaded) {
+        const recent = await fetchLastEventAnywhere({
+          userId: session.userId,
+          accessToken: session.accessToken,
+        });
+        anywhereOpen = recent?.event_type === "clock_in";
+        anywhereLoaded = true;
+      }
+      if (anywhereOpen) {
+        await appendDiag(
+          "dwell",
+          `enter skip site=${site.id} reason=open-clock-elsewhere`
+        );
+        continue;
+      }
+
+      // Back-date occurred_at to the earliest of the consecutive inside
+      // samples — that's when the user actually arrived, not now().
+      const earliestInsideMs = tail.reduce(
+        (min, s) => (s.sampledAt < min ? s.sampledAt : min),
+        tail[0]!.sampledAt
+      );
+      const occurredAtIso = new Date(earliestInsideMs).toISOString();
+      const ok = await insertClockIn({
+        userId: session.userId,
+        orgId: session.orgId,
+        jobsiteId: site.id,
+        accessToken: session.accessToken,
+        occurredAtIso,
+        lat,
+        lng,
+        accuracyM: sampleAccuracy,
+        distanceFromSiteM: distance,
+      });
+      await appendDiag(
+        "dwell",
+        `enter site=${site.id} ok=${ok} to=${occurredAtIso} reason=consecutive-inside-samples (${ENTER_CONSECUTIVE})`
+      );
+      if (ok) {
+        anywhereOpen = true; // prevent ENTER for any other site this tick
+        await fireClockInNotification(site.name ?? "Site", occurredAtIso);
+      }
       continue;
     }
-    if (!outsideBuffered) {
-      // In the jitter zone (between radius and radius+buffer). Don't reset
-      // the timer but don't start it either.
+
+    // From here on the most recent sample is OUTSIDE the radius.
+
+    // Fast-path exit: if any persisted sample in the last 2 minutes shows
+    // the user past radius+buffer, fire the exit immediately rather than
+    // waiting for the dwell window to accumulate via the outsideMap. This
+    // catches the case where the OS delivered samples sparsely (e.g. one
+    // every 30s) so we never get 3+ consecutive batches showing outside,
+    // but the user has objectively been gone for minutes.
+    const twoMinAgo = Date.now() - DWELL_EXIT_SECS * 1000;
+    const fastExitEvidence = recentSamples.some(
+      (s) =>
+        s.sampledAt >= twoMinAgo &&
+        haversineDistance(s.lat, s.lng, site.lat, site.lng) >
+          site.radius_m + EXIT_BUFFER_M
+    );
+
+    if (!outsideBuffered && !fastExitEvidence) {
+      // In the jitter zone (between radius and radius+buffer) AND no recent
+      // hard-outside evidence. Don't reset the timer but don't start it.
       continue;
     }
 
     // We are definitely outside this site.
     const firstAt = outsideMap[site.id];
-    if (firstAt == null) {
+    if (firstAt == null && !fastExitEvidence) {
       // Use the earliest sample we have showing user outside (might be older
       // than this batch if the OS deferred deliveries).
       let earliestOutside = sampleTs;
@@ -296,18 +529,44 @@ async function handleLocationSample(
       outsideMapDirty = true;
       continue;
     }
-    const outsideFor = (Date.now() - firstAt) / 1000;
-    if (outsideFor < DWELL_EXIT_SECS) continue;
 
-    // Dwell satisfied. If the user has an open clock_in at this site, write
-    // a clock_out (back-dated to firstAt — when they ACTUALLY left).
+    // If fast-exit evidence applies but we don't yet have a firstAt mark,
+    // use the earliest qualifying sample from the persisted buffer so the
+    // back-date is honest.
+    let effectiveFirstAt = firstAt ?? sampleTs;
+    if (fastExitEvidence) {
+      const earliestOutsideRecent = recentSamples
+        .filter(
+          (s) =>
+            s.sampledAt >= twoMinAgo &&
+            haversineDistance(s.lat, s.lng, site.lat, site.lng) >
+              site.radius_m + EXIT_BUFFER_M
+        )
+        .reduce<number | null>(
+          (min, s) => (min == null || s.sampledAt < min ? s.sampledAt : min),
+          null
+        );
+      if (earliestOutsideRecent != null) {
+        effectiveFirstAt =
+          firstAt != null
+            ? Math.min(firstAt, earliestOutsideRecent)
+            : earliestOutsideRecent;
+      }
+    } else {
+      const outsideFor = (Date.now() - effectiveFirstAt) / 1000;
+      if (outsideFor < DWELL_EXIT_SECS) continue;
+    }
+
+    // Dwell satisfied (or fast-exit evidence triggered). If the user has an
+    // open clock_in at this site, write a clock_out back-dated to when
+    // they ACTUALLY left.
     const last = await fetchLastEventAtSite({
       userId: session.userId,
       jobsiteId: site.id,
       accessToken: session.accessToken,
     });
     if (last?.event_type === "clock_in") {
-      const occurredAtIso = new Date(firstAt).toISOString();
+      const occurredAtIso = new Date(effectiveFirstAt).toISOString();
       const ok = await insertClockOut({
         userId: session.userId,
         orgId: session.orgId,
@@ -321,7 +580,7 @@ async function handleLocationSample(
       });
       await appendDiag(
         "dwell",
-        `clock_out ok=${ok} site=${site.id} firstOutside=${new Date(firstAt).toISOString()}`
+        `clock_out ok=${ok} site=${site.id} firstOutside=${occurredAtIso} fast=${fastExitEvidence}`
       );
       if (!ok) {
         // Retry next tick by leaving entry in map but re-arming so we'll
@@ -334,8 +593,10 @@ async function handleLocationSample(
       outsideMapDirty = true;
     } else {
       // Nothing to close — clear so we don't keep retrying.
-      delete outsideMap[site.id];
-      outsideMapDirty = true;
+      if (outsideMap[site.id] != null) {
+        delete outsideMap[site.id];
+        outsideMapDirty = true;
+      }
     }
   }
 
