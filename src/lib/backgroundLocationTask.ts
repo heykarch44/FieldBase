@@ -22,6 +22,7 @@ import * as TaskManager from "expo-task-manager";
 import * as Notifications from "expo-notifications";
 import {
   readSessionCache,
+  writeSessionCache,
   readCachedSites,
   readCachedClockLabels,
   writeLastPosition,
@@ -30,7 +31,9 @@ import {
   readSiteOutsideMap,
   writeSiteOutsideMap,
   appendDiag,
+  type CachedSession,
 } from "./sessionCache";
+import { supabase } from "./supabase";
 import { haversineDistance } from "./geo";
 
 async function fireClockOutNotification(
@@ -123,6 +126,110 @@ const SUPABASE_ANON_KEY =
 
 interface LocationTaskBody {
   locations?: Location.LocationObject[];
+}
+
+// Tracks whether we've already emitted the "session-loaded" diag for this
+// JS context. iOS recreates the JS context across cold starts, so this
+// resets naturally on each process spin-up — exactly when we want to see
+// the line again.
+let sessionLoadedLogged = false;
+
+// Resolve a usable session for background inserts. Tries multiple sources
+// because the dwell task runs in its own JS context that may not have
+// rehydrated the in-memory supabase client yet:
+//   1. supabase.auth.getSession() — reads from SecureStore via the
+//      configured adapter and auto-refreshes if needed
+//   2. readSessionCache() — the manual SecureStore cache written by
+//      AuthProvider; survives even if the supabase client hasn't loaded
+//   3. If we got tokens from (2) but supabase has no live session, push
+//      them in via setSession so subsequent calls in this context work
+//
+// Returns null on any of the granular failure modes after logging which
+// one was hit. org_id comes only from the manual cache because Supabase
+// sessions don't carry our app-level org assignment.
+async function loadBackgroundSession(): Promise<CachedSession | null> {
+  let userId: string | null = null;
+  let accessToken: string | null = null;
+  let refreshToken: string | null = null;
+
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      await appendDiag("dwell", `getSession-error ${String(error.message ?? error)}`);
+    }
+    const sb = data?.session ?? null;
+    if (sb?.access_token && sb.user?.id) {
+      userId = sb.user.id;
+      accessToken = sb.access_token;
+      refreshToken = sb.refresh_token ?? null;
+    }
+  } catch (e) {
+    await appendDiag("dwell", `getSession-throw ${String(e)}`);
+  }
+
+  // Fall back to the manual SecureStore cache (or use it for org_id even
+  // when supabase resolved the session).
+  const manual = await readSessionCache();
+  if (!userId || !accessToken) {
+    if (!manual) {
+      await appendDiag("dwell", "no-session-from-storage");
+      return null;
+    }
+    userId = manual.userId;
+    accessToken = manual.accessToken;
+    refreshToken = manual.refreshToken ?? refreshToken;
+
+    // Prime the supabase client for any subsequent calls in this context.
+    if (manual.refreshToken) {
+      try {
+        await supabase.auth.setSession({
+          access_token: manual.accessToken,
+          refresh_token: manual.refreshToken,
+        });
+      } catch {
+        // best-effort — REST inserts don't depend on the live client
+      }
+    }
+  }
+
+  if (!userId || !accessToken) {
+    await appendDiag("dwell", "no-session-from-supabase");
+    return null;
+  }
+
+  const orgId = manual?.orgId ?? null;
+  if (!orgId) {
+    await appendDiag("dwell", "no-org-id");
+    return null;
+  }
+
+  // Refresh the persisted cache if supabase produced a newer token than
+  // what we had on disk. Keeps the geofence task and a future dwell tick
+  // from operating on a stale token.
+  if (manual && (manual.accessToken !== accessToken || manual.userId !== userId)) {
+    try {
+      await writeSessionCache({
+        userId,
+        orgId,
+        accessToken,
+        refreshToken: refreshToken ?? manual.refreshToken ?? null,
+      });
+    } catch {
+      // non-fatal
+    }
+  }
+
+  if (!sessionLoadedLogged) {
+    sessionLoadedLogged = true;
+    await appendDiag("dwell", `session-loaded user=${userId} org=${orgId}`);
+  }
+
+  return {
+    userId,
+    orgId,
+    accessToken,
+    refreshToken: refreshToken ?? null,
+  };
 }
 
 // A fetch() with a hard timeout so background task invocations can't hang
@@ -316,9 +423,9 @@ async function handleLocationSample(
     return;
   }
 
-  const session = await readSessionCache();
+  const session = await loadBackgroundSession();
   if (!session || !session.orgId) {
-    await appendDiag("dwell", "no-session");
+    // Granular reason already logged inside loadBackgroundSession.
     return;
   }
 
